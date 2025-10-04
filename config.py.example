@@ -1,0 +1,5 @@
+# This is an example configuration file.
+# Copy this file to config.py and fill in your own secret key.
+
+# Secret key for signing JWTs. This should be a long, random, and secret string!
+JWT_SECRET_KEY = "change-this-to-a-real-secret-key"
