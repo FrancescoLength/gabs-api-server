@@ -138,15 +138,40 @@ class Scraper:
                     instructor = p.text.strip()[5:].replace('.','')
                     break
 
+            start_time_span = gym_class.find('span', {'itemprop': 'startDate'})
+            end_time_span = gym_class.find('span', {'itemprop': 'endDate'})
+
+            start_time_str = start_time_span.text.strip() if start_time_span else "N/A"
+            end_time_str = end_time_span.text.strip() if end_time_span else "N/A"
+
+            duration = "N/A"
+            if start_time_str != "N/A" and end_time_str != "N/A":
+                try:
+                    from datetime import datetime
+                    start_dt = datetime.strptime(start_time_str, '%H:%M')
+                    end_dt = datetime.strptime(end_time_str, '%H:%M')
+                    # If end_dt is before start_dt, it means it's the next day
+                    if end_dt < start_dt:
+                        end_dt += timedelta(days=1)
+                    duration_td = end_dt - start_dt
+                    duration = int(duration_td.total_seconds() / 60)
+                except ValueError:
+                    logging.warning(f"Could not parse time for duration calculation: {start_time_str} - {end_time_str}")
+
             class_date = target_date.strftime("%d/%m/%Y")
-            class_time = start_time_span.text.strip() if start_time_span else "N/A"
             
+            remaining_spaces_tag = gym_class.find('span', {'class': 'remaining'})
+            available_spaces = int(remaining_spaces_tag.text.strip()) if remaining_spaces_tag and remaining_spaces_tag.text.strip().isdigit() else 0
+
             parsed_classes.append({
                 'name': title_tag.text.strip() if title_tag else "N/A",
                 'description': description_div.get_text(strip=True) if description_div else "N/A",
                 'instructor': instructor,
                 'date': class_date,
-                'time': class_time
+                'start_time': start_time_str,
+                'end_time': end_time_str,
+                'duration': duration,
+                'available_spaces': available_spaces
             })
         return parsed_classes
 
