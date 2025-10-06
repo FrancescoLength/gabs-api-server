@@ -165,11 +165,12 @@ class Scraper:
                 class_found_in_list = True
                 logging.info(f"Found matching class: {title}")
                 
+                already_booked_msg = gym_class.find(string=re.compile("you are already registered|you are on the waiting list", re.I))
+                if already_booked_msg:
+                    return {"status": "info", "message": already_booked_msg.strip()}
+
                 form = gym_class.find('form', {'data-request': True})
                 if not form:
-                    already_booked_msg = gym_class.find(string=re.compile("you are already registered|you are on the waiting list", re.I))
-                    if already_booked_msg:
-                        return {"status": "info", "message": already_booked_msg.strip()}
                     return {"status": "error", "message": "Class found, but no booking form was available."}
 
                 handler = form.get('data-request')

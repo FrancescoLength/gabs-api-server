@@ -93,6 +93,8 @@ def book_class():
         result = user_scraper.find_and_book_class(class_name, target_date)
         if result.get('status') == 'error':
             return jsonify(result), 400
+        if result.get('status') == 'info':
+            return jsonify(result), 200
         return jsonify(result), 200
     except Exception as e:
         logging.error(f"Unhandled error in /api/book for user {current_user}: {e}")
