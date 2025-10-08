@@ -1,4 +1,5 @@
 import requests
+import config
 from bs4 import BeautifulSoup
 import logging
 from datetime import date, timedelta
@@ -6,9 +7,10 @@ import re
 from thefuzz import fuzz
 
 # Constants
-LOGIN_URL = 'https://www.workoutbristol.co.uk/login'
-MEMBERS_URL = 'https://www.workoutbristol.co.uk/members'
-BOOKING_URL = 'https://www.workoutbristol.co.uk/book-classes'
+BASE_URL = config.WEBSITE_URL
+LOGIN_URL = BASE_URL + 'login'
+MEMBERS_URL = BASE_URL + 'members'
+BOOKING_URL = BASE_URL + 'book-classes'
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'
 BASE_HEADERS = {
     'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',

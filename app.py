@@ -10,6 +10,7 @@ from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_requir
 from scraper import Scraper
 import config
 import database
+from pywebpush import webpush
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -33,7 +34,7 @@ def process_auto_bookings():
         logging.info("Running scheduled job: process_auto_bookings")
         pending_bookings = database.get_pending_auto_bookings()
         for booking in pending_bookings:
-            booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date = booking
+            booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent = booking
 
             # Calculate the next target date for this recurring booking
             today = datetime.now()
@@ -87,7 +88,68 @@ def process_auto_bookings():
                     database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
                     logging.error(f"Error during booking attempt for auto-booking {booking_id}: {e}. Marking as failed after {new_retry_count} retries.")
 
+def send_cancellation_reminders():
+    with app.app_context():
+        logging.info("Running scheduled job: send_cancellation_reminders")
+        upcoming_bookings = database.get_upcoming_bookings_for_notification()
+        
+        for booking in upcoming_bookings:
+            booking_id, username, class_name, target_time_str, day_of_week, instructor, last_booked_date = booking
+
+            # Calculate the next occurrence date for this recurring booking
+            today = datetime.now()
+            days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
+            target_day_index = days_of_week_map[day_of_week]
+            
+            days_until_target = (target_day_index - today.weekday() + 7) % 7
+            next_occurrence_date = today + timedelta(days=days_until_target)
+            current_target_date = next_occurrence_date.strftime("%Y-%m-%d")
+
+            # If last_booked_date is set, ensure we are looking at the correct occurrence
+            if last_booked_date and last_booked_date != current_target_date:
+                # This booking is for a future occurrence, or already passed for today
+                continue
+
+            class_datetime = datetime.strptime(f"{current_target_date} {target_time_str}", "%Y-%m-%d %H:%M")
+            cancellation_deadline = class_datetime - timedelta(minutes=180)
+            notification_time = cancellation_deadline - timedelta(minutes=30)
+
+            if notification_time <= datetime.now() < cancellation_deadline:
+                logging.info(f"Sending cancellation reminder for booking {booking_id} for user {username}")
+                subscriptions = database.get_push_subscriptions_for_user(username)
+                
+                for sub in subscriptions:
+                    try:
+                        webpush(
+                            subscription_info=sub,
+                            data=json.dumps({
+                                "title": "Promemoria Cancellazione Classe!",
+                                "body": f"Ricorda di cancellare la classe {class_name} delle {target_time_str} entro 30 minuti per evitare la multa!",
+                                "icon": "/favicon.png",
+                                "badge": "/favicon.png",
+                                "tag": f"cancellation-reminder-{booking_id}",
+                                "url": "/my-bookings" # Optional: URL to open when notification is clicked
+                            }),
+                            vapid_private_key=config.VAPID_PRIVATE_KEY,
+                            vapid_public_key=config.VAPID_PUBLIC_KEY,
+                            vapid_admin_email="mailto:your_email@example.com" # Replace with your email
+                        )
+                        logging.info(f"Push notification sent for booking {booking_id} to user {username}")
+                    except Exception as e:
+                        logging.error(f"Error sending push notification to {sub['endpoint']} for user {username}: {e}")
+                        # If the subscription is no longer valid, delete it from the database
+                        if "410" in str(e): # GONE status code for invalid subscription
+                            database.delete_push_subscription(sub['endpoint'])
+                            logging.info(f"Deleted invalid push subscription for user {username}: {sub['endpoint']}")
+                
+                # Mark notification as sent for this booking
+                database.update_auto_booking_status(booking_id, 'pending', notification_sent=1)
+            elif datetime.now() >= cancellation_deadline and booking[11] == 0: # Check if notification_sent is 0 (index 11 in the tuple)
+                # If cancellation deadline passed and notification was not sent, mark it as sent to avoid re-processing
+                database.update_auto_booking_status(booking_id, 'pending', notification_sent=1)
+
 scheduler.add_job(process_auto_bookings, 'interval', minutes=1, id='auto_booking_processor', replace_existing=True)
+scheduler.add_job(send_cancellation_reminders, 'interval', minutes=1, id='cancellation_reminder_sender', replace_existing=True)
 scheduler.start()
 logging.info("APScheduler started.")
 
@@ -348,6 +410,28 @@ def logout_user():
         del scraper_cache[current_user]
         logging.info(f"Removed session for user: {current_user}")
     return jsonify({"message": "Successfully logged out"})
+
+@app.route('/api/vapid-public-key', methods=['GET'])
+def get_vapid_public_key():
+    return config.VAPID_PUBLIC_KEY, 200
+
+@app.route('/api/subscribe-push', methods=['POST'])
+@jwt_required()
+def subscribe_push():
+    current_user = get_jwt_identity()
+    subscription_info = request.get_json()
+
+    if not subscription_info:
+        return jsonify({"error": "Subscription info is required."}), 400
+
+    try:
+        # This function will be implemented in database.py in the next step
+        database.save_push_subscription(current_user, subscription_info)
+        logging.info(f"Push subscription saved for user: {current_user}")
+        return jsonify({"message": "Push subscription successful"}), 201
+    except Exception as e:
+        logging.error(f"Error saving push subscription for user {current_user}: {e}")
+        return jsonify({"error": "Failed to save push subscription."}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

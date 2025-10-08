@@ -7,9 +7,9 @@ venv/
 
 # Ignore sensitive configuration
 config.py
+static_timetable.json
 
 # Ignore temporary debug files
 *.html
 *.json
-workout_ashton_timetable.csv
 auto_bookings.db
