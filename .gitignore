@@ -11,3 +11,5 @@ config.py
 # Ignore temporary debug files
 *.html
 *.json
+workout_ashton_timetable.csv
+auto_bookings.db

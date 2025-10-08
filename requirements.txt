@@ -3,3 +3,5 @@ Flask-Cors
 requests
 beautifulsoup4
 Flask-JWT-Extended
+APScheduler
+thefuzz
