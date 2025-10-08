@@ -6,3 +6,4 @@ Flask-JWT-Extended
 APScheduler
 thefuzz
 pywebpush
+SQLAlchemy
