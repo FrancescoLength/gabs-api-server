@@ -19,7 +19,15 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
-CORS(app)
+
+# Explicitly define allowed origins for CORS
+origins = [
+    "https://gabs-bristol.vercel.app",  # Vercel frontend
+    "http://localhost:3000",             # Local React dev server
+    "http://localhost:5173",             # Local Vite dev server
+    r"https://.*\.ngrok-free\.dev"        # Regex for ngrok tunnels
+]
+CORS(app, resources={r"/api/*": {"origins": origins}}, supports_credentials=True)
 
 database.init_db()
 
