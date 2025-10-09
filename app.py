@@ -139,8 +139,7 @@ def send_cancellation_reminders():
                                 "url": "/my-bookings" # Optional: URL to open when notification is clicked
                             }),
                             vapid_private_key=config.VAPID_PRIVATE_KEY,
-                            vapid_public_key=config.VAPID_PUBLIC_KEY,
-                            vapid_admin_email="mailto:your_email@example.com" # Replace with your email
+                            vapid_claims={"sub": config.VAPID_ADMIN_EMAIL}
                         )
                         logging.info(f"Push notification sent for booking {booking_id} to user {username}")
                     except Exception as e:
@@ -440,6 +439,49 @@ def subscribe_push():
     except Exception as e:
         logging.error(f"Error saving push subscription for user {current_user}: {e}")
         return jsonify({"error": "Failed to save push subscription."}), 500
+
+@app.route('/api/test-push-notification', methods=['POST'])
+@jwt_required()
+def test_push_notification():
+    current_user = get_jwt_identity()
+    logging.info(f"User {current_user} is requesting to send a test push notification.")
+
+    try:
+        all_subscriptions = database.get_all_push_subscriptions()
+        if not all_subscriptions:
+            return jsonify({"message": "No push subscriptions found."}), 200
+
+        sent_count = 0
+        failed_count = 0
+        for sub in all_subscriptions:
+            try:
+                # Use a generic test message
+                webpush(
+                    subscription_info=sub,
+                    data=json.dumps({
+                        "title": "Test Notifica Push!",
+                        "body": f"Ciao {sub['username']}! Questa è una notifica di test dal tuo backend GABS.",
+                        "icon": "/favicon.png",
+                        "badge": "/favicon.png",
+                        "tag": "test-notification",
+                        "url": "/my-bookings"
+                    }),
+                    vapid_private_key=config.VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": config.VAPID_ADMIN_EMAIL}
+                )
+                logging.info(f"Test push notification sent to {sub['username']} ({sub['endpoint']})")
+                sent_count += 1
+            except Exception as e:
+                logging.error(f"Error sending test push notification to {sub['username']} ({sub['endpoint']}): {e}")
+                if "410" in str(e): # GONE status code for invalid subscription
+                    database.delete_push_subscription(sub['endpoint'])
+                    logging.info(f"Deleted invalid push subscription for user {sub['username']}: {sub['endpoint']}")
+                failed_count += 1
+        
+        return jsonify({"message": f"Test push notifications sent. Successful: {sent_count}, Failed: {failed_count}."}), 200
+    except Exception as e:
+        logging.error(f"Error in test_push_notification endpoint: {e}")
+        return jsonify({"error": "An internal server error occurred during test notification."}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

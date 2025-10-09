@@ -88,6 +88,23 @@ def delete_push_subscription(endpoint):
     conn.close()
     return cursor.rowcount > 0
 
+def get_all_push_subscriptions():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, endpoint, p256dh, auth FROM push_subscriptions")
+    subscriptions = []
+    for sub in cursor.fetchall():
+        subscriptions.append({
+            'username': sub[0],
+            'endpoint': sub[1],
+            'keys': {
+                'p256dh': sub[2],
+                'auth': sub[3]
+            }
+        })
+    conn.close()
+    return subscriptions
+
 def add_auto_booking(username, class_name, target_time, day_of_week, instructor):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
