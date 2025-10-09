@@ -131,8 +131,8 @@ def send_cancellation_reminders():
                         webpush(
                             subscription_info=sub,
                             data=json.dumps({
-                                "title": "Promemoria Cancellazione Classe!",
-                                "body": f"Ricorda di cancellare la classe {class_name} delle {target_time_str} entro 30 minuti per evitare la multa!",
+                                "title": "Class Cancellation Reminder!",
+                                "body": f"Delete {class_name} at {target_time_str} within 30 min to avoid a fine!",
                                 "icon": "/favicon.png",
                                 "badge": "/favicon.png",
                                 "tag": f"cancellation-reminder-{booking_id}",
