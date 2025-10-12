@@ -219,7 +219,7 @@ class Scraper:
                     best_match_element = gym_class
 
         # Second pass: execute booking for the best match found
-        if best_match_element and highest_score > 85:
+        if best_match_element and highest_score > 51:
             title_tag = best_match_element.find('h2', {'class': 'title'})
             title = title_tag.text.strip() if title_tag else "Unknown"
             logging.info(f"Found best match for '{class_name}': '{title}' with score {highest_score}")
