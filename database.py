@@ -91,16 +91,14 @@ def delete_push_subscription(endpoint):
 def get_all_push_subscriptions():
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT username, endpoint, p256dh, auth FROM push_subscriptions")
+    cursor.execute("SELECT id, username, endpoint, created_at FROM push_subscriptions")
     subscriptions = []
     for sub in cursor.fetchall():
         subscriptions.append({
-            'username': sub[0],
-            'endpoint': sub[1],
-            'keys': {
-                'p256dh': sub[2],
-                'auth': sub[3]
-            }
+            'id': sub[0],
+            'username': sub[1],
+            'endpoint': sub[2],
+            'created_at': sub[3]
         })
     conn.close()
     return subscriptions
@@ -174,6 +172,14 @@ def cancel_auto_booking(booking_id, username):
     conn.commit()
     conn.close()
     return cursor.rowcount > 0
+
+def get_all_auto_bookings():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent FROM auto_bookings")
+    bookings = cursor.fetchall()
+    conn.close()
+    return bookings
 
 if __name__ == '__main__':
     init_db()

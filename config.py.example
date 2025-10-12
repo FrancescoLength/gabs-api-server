@@ -3,3 +3,12 @@
 
 # Secret key for signing JWTs. This should be a long, random, and secret string!
 JWT_SECRET_KEY = "change-this-to-a-real-secret-key"
+
+WEBSITE_URL = 'https://www.workoutbristol.co.uk/'
+
+MAX_AUTO_BOOK_RETRIES = 3 # Maximum number of retries for auto-booking a class
+
+VAPID_PUBLIC_KEY = "..."
+VAPID_PRIVATE_KEY = "..."
+VAPID_ADMIN_EMAIL = "mailto:your_email@example.com" # Replace with your email
+ADMIN_EMAIL = "your_admin_email@example.com"

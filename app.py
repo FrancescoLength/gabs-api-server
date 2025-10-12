@@ -4,8 +4,10 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import logging
 from datetime import datetime, timedelta
+from functools import wraps
+from logging.handlers import RotatingFileHandler
 
-from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager
+from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager, verify_jwt_in_request
 
 from scraper import Scraper
 import config
@@ -16,9 +18,30 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+log_file = 'gabs_api.log'
+
+# File handler
+file_handler = RotatingFileHandler(log_file, maxBytes=1024 * 1024 * 5, backupCount=2) # 5 MB per file, 2 backups
+file_handler.setFormatter(log_formatter)
+file_handler.setLevel(logging.INFO)
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(log_formatter)
+console_handler.setLevel(logging.INFO)
+
+# Root logger
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+root_logger.addHandler(file_handler)
+root_logger.addHandler(console_handler)
+
+logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
 app = Flask(__name__)
+app.start_time = datetime.now()
+
 
 # Explicitly define allowed origins for CORS
 origins = [
@@ -39,7 +62,6 @@ scheduler = BackgroundScheduler(jobstores=jobstores)
 
 def process_auto_bookings():
     with app.app_context():
-        logging.info("Running scheduled job: process_auto_bookings")
         pending_bookings = database.get_pending_auto_bookings()
         for booking in pending_bookings:
             booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent = booking
@@ -54,14 +76,12 @@ def process_auto_bookings():
             current_target_date = next_occurrence_date.strftime("%Y-%m-%d")
 
             if last_booked_date == current_target_date:
-                logging.info(f"Recurring booking {booking_id} for {current_target_date} already processed. Skipping.")
                 continue
 
             target_datetime = datetime.strptime(f"{current_target_date} {target_time}", "%Y-%m-%d %H:%M")
             booking_time = int((target_datetime - timedelta(hours=48)).timestamp())
 
             if booking_time > int(datetime.now().timestamp()) + 300: # 5 minutes grace period
-                logging.info(f"Recurring booking {booking_id} for {current_target_date} is not yet due. Skipping.")
                 continue
             
             retry_count = 0
@@ -98,11 +118,10 @@ def process_auto_bookings():
 
 def send_cancellation_reminders():
     with app.app_context():
-        logging.info("Running scheduled job: send_cancellation_reminders")
         upcoming_bookings = database.get_upcoming_bookings_for_notification()
         
         for booking in upcoming_bookings:
-            booking_id, username, class_name, target_time_str, day_of_week, instructor, last_booked_date = booking
+            booking_id, username, class_name, target_time_str, day_of_week, instructor, last_booked_date, notification_sent = booking
 
             # Calculate the next occurrence date for this recurring booking
             today = datetime.now()
@@ -166,6 +185,17 @@ atexit.register(lambda: scheduler.shutdown())
 app.config["JWT_SECRET_KEY"] = config.JWT_SECRET_KEY
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
 jwt = JWTManager(app)
+
+# --- Admin decorator ---
+def admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        verify_jwt_in_request()
+        current_user = get_jwt_identity()
+        if current_user != config.ADMIN_EMAIL:
+            return jsonify({"error": "Admins only!"}), 403
+        return fn(*args, **kwargs)
+    return wrapper
 
 scraper_cache = {}
 
@@ -298,6 +328,8 @@ def book_class():
     target_time = data.get('time')  # Extract time from request
     if not all([class_name, target_date, target_time]):
         return jsonify({"error": "class_name, date, and time are required."}), 400
+    
+    logging.info(f"User {current_user} attempting to book class {class_name} on {target_date} at {target_time}")
     try:
         # Pass time to the scraper function
         result = user_scraper.find_and_book_class(
@@ -323,6 +355,8 @@ def cancel_booking():
     target_time = data.get('time')
     if not class_name or not target_date or not target_time:
         return jsonify({"error": "class_name, date, and time are required."}), 400
+    
+    logging.info(f"User {current_user} attempting to cancel class {class_name} on {target_date} at {target_time}")
     try:
         result = user_scraper.find_and_cancel_booking(class_name, target_date, target_time)
         return jsonify(result), 200
@@ -460,7 +494,7 @@ def test_push_notification():
                     subscription_info=sub,
                     data=json.dumps({
                         "title": "Test Notifica Push!",
-                        "body": f"Ciao {sub['username']}! Questa è una notifica di test dal tuo backend GABS.",
+                        "body": f"Ciao {sub['username']}! Questa  una notifica di test dal tuo backend GABS.",
                         "icon": "/favicon.png",
                         "badge": "/favicon.png",
                         "tag": "test-notification",
@@ -482,6 +516,41 @@ def test_push_notification():
     except Exception as e:
         logging.error(f"Error in test_push_notification endpoint: {e}")
         return jsonify({"error": "An internal server error occurred during test notification."}), 500
+
+# --- Admin Endpoints ---
+
+@app.route('/api/admin/logs', methods=['GET'])
+@admin_required
+def get_logs():
+    try:
+        with open(log_file, 'r') as f:
+            lines = f.readlines()
+            return jsonify(lines[-100:]) # Return last 100 lines
+    except FileNotFoundError:
+        return jsonify({"error": "Log file not found."}), 404
+
+@app.route('/api/admin/auto_bookings', methods=['GET'])
+@admin_required
+def get_all_auto_bookings():
+    bookings = database.get_all_auto_bookings()
+    return jsonify(bookings)
+
+@app.route('/api/admin/push_subscriptions', methods=['GET'])
+@admin_required
+def get_all_push_subscriptions():
+    subscriptions = database.get_all_push_subscriptions()
+    return jsonify(subscriptions)
+
+@app.route('/api/admin/status', methods=['GET'])
+@admin_required
+def get_status():
+    uptime = datetime.now() - app.start_time
+    return jsonify({
+        "status": "ok",
+        "uptime": str(uptime),
+        "scraper_cache_size": len(scraper_cache)
+    })
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
