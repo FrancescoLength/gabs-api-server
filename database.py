@@ -160,7 +160,7 @@ def get_upcoming_bookings_for_notification():
     # For recurring bookings, we need to calculate the next occurrence date
     # This function will return all pending bookings that haven't sent a notification yet.
     # The time-based filtering will happen in the APScheduler job.
-    cursor.execute("SELECT id, username, class_name, target_time, day_of_week, instructor, last_booked_date FROM auto_bookings WHERE status = 'pending' AND notification_sent = 0")
+    cursor.execute("SELECT id, username, class_name, target_time, day_of_week, instructor, last_booked_date, notification_sent FROM auto_bookings WHERE status = 'pending' AND notification_sent = 0")
     bookings = cursor.fetchall()
     conn.close()
     return bookings
