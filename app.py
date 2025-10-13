@@ -171,7 +171,7 @@ def send_cancellation_reminders():
                 
                 # Mark notification as sent for this booking
                 database.update_auto_booking_status(booking_id, 'pending', notification_sent=1)
-            elif datetime.now() >= cancellation_deadline and booking[11] == 0: # Check if notification_sent is 0 (index 11 in the tuple)
+            elif datetime.now() >= cancellation_deadline and notification_sent == 0: # Check if notification_sent is 0
                 # If cancellation deadline passed and notification was not sent, mark it as sent to avoid re-processing
                 database.update_auto_booking_status(booking_id, 'pending', notification_sent=1)
 
