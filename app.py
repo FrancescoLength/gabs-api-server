@@ -81,7 +81,7 @@ def process_auto_bookings():
             target_datetime = datetime.strptime(f"{current_target_date} {target_time}", "%Y-%m-%d %H:%M")
             booking_time = int((target_datetime - timedelta(hours=48)).timestamp())
 
-            if booking_time > int(datetime.now().timestamp()) + 300: # 5 minutes grace period
+            if booking_time > int(datetime.now().timestamp()):
                 continue
             
             retry_count = 0
@@ -96,9 +96,10 @@ def process_auto_bookings():
                 logging.info(f"Attempting to book class on {current_target_date} at {target_time} with {instructor} for user {username} (Booking ID: {booking_id})")
                 result = user_scraper.find_and_book_class(target_date_str=current_target_date, class_name=class_name, target_time=target_time, instructor=instructor)
                 
-                if result.get('status') == 'success' or (result.get('status') == 'info' and "already booked" in result.get('message', '').lower()):
+                result_message = result.get('message', '').lower()
+                if result.get('status') == 'success' or (result.get('status') == 'info' and ("already booked" in result_message or "waiting list" in result_message)):
                     database.update_auto_booking_status(booking_id, 'pending', last_booked_date=current_target_date, last_attempt_at=int(datetime.now().timestamp()))
-                    logging.info(f"Successfully processed booking for auto-booking {booking_id}.")
+                    logging.info(f"Successfully processed booking for auto-booking {booking_id}. Status: {result.get('message')}")
                 else:
                     new_retry_count = retry_count + 1
                     if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:
