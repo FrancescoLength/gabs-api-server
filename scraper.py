@@ -2,7 +2,7 @@ import requests
 import config
 from bs4 import BeautifulSoup
 import logging
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import re
 from thefuzz import fuzz
 
@@ -24,7 +24,10 @@ class Scraper:
         self.password = password
         self.session = requests.Session()
         self.csrf_token = None
-        self._login()
+        self.relogin_failures = 0
+        self.disabled_until = None
+        if not self._login():
+            raise Exception("Initial login failed.")
 
     def _get_csrf_token(self):
         """Fetch the CSRF token from the meta tag."""
@@ -39,31 +42,43 @@ class Scraper:
             return None
 
     def _login(self):
-        """Establish a session by logging in."""
-        logging.info("Attempting to establish session and log in...")
-        self.csrf_token = self._get_csrf_token()
-        if not self.csrf_token:
-            raise Exception("Could not get CSRF token. Login failed.")
+        """Establish a session by logging in. Returns True on success, False on failure."""
+        if self.disabled_until and datetime.now() < self.disabled_until:
+            logging.warning(f"Scraper for {self.username} is temporarily disabled due to repeated login failures.")
+            return False
 
-        payload = {
-            'login': self.username,
-            'password': self.password,
-        }
-        headers = {
-            **BASE_HEADERS,
-            'X-Winter-Request-Handler': 'onSignin',
-            'x-csrf-token': self.csrf_token,
-        }
+        logging.info(f"Attempting to establish session and log in for {self.username}...")
         try:
+            self.csrf_token = self._get_csrf_token()
+            if not self.csrf_token:
+                raise Exception("Could not get CSRF token.")
+
+            payload = {
+                'login': self.username,
+                'password': self.password,
+            }
+            headers = {
+                **BASE_HEADERS,
+                'X-Winter-Request-Handler': 'onSignin',
+                'x-csrf-token': self.csrf_token,
+            }
             response = self.session.post(LOGIN_URL, data=payload, headers=headers)
             response.raise_for_status()
+
             if response.json().get("X_WINTER_REDIRECT"):
-                logging.info("Login successful!")
+                logging.info(f"Login successful for {self.username}!")
+                self.relogin_failures = 0
+                self.disabled_until = None
                 return True
             else:
                 raise Exception(f"Login failed. Server responded with: {response.text}")
-        except (requests.exceptions.RequestException, ValueError) as e:
-            raise Exception(f"An error occurred during login: {e}")
+        except Exception as e:
+            logging.error(f"An error occurred during login for {self.username}: {e}")
+            self.relogin_failures += 1
+            if self.relogin_failures >= 3:
+                self.disabled_until = datetime.now() + timedelta(minutes=15)
+                logging.critical(f"Disabling scraper for {self.username} for 15 minutes due to {self.relogin_failures} consecutive login failures.")
+            return False
 
     def get_classes(self, days_in_advance=7):
         """Fetch all available classes for the next N days."""
@@ -103,6 +118,9 @@ class Scraper:
 
     def _get_classes_for_single_date(self, target_date_str):
         """Helper method to fetch class HTML for a single date."""
+        if self.disabled_until and datetime.now() < self.disabled_until:
+            raise Exception(f"Scraper for {self.username} is temporarily disabled.")
+
         payload = {'date': target_date_str}
         headers = {
             **BASE_HEADERS,
@@ -117,14 +135,30 @@ class Scraper:
 
             if json_response.get("X_OCTOBER_REDIRECT"):
                 logging.warning(f"Redirect received for {target_date_str}, attempting to re-login...")
-                self._login()
-                headers['x-csrf-token'] = self.csrf_token
-                response = self.session.post(BOOKING_URL, data=payload, headers=headers)
-                json_response = response.json()
+                if self._login():
+                    headers['x-csrf-token'] = self.csrf_token
+                    response = self.session.post(BOOKING_URL, data=payload, headers=headers)
+                    response.raise_for_status()
+                    json_response = response.json()
+                else:
+                    raise Exception("Re-login failed.")
 
             return json_response.get('@events')
-        except (requests.exceptions.RequestException, ValueError) as e:
-            logging.error(f"Failed to get classes for {target_date_str}: {e}")
+        except requests.exceptions.RequestException as e:
+            if e.response and e.response.status_code == 403:
+                logging.warning(f"Forbidden (403) error when fetching classes for {target_date_str}. Attempting re-login.")
+                if self._login():
+                    headers['x-csrf-token'] = self.csrf_token
+                    response = self.session.post(BOOKING_URL, data=payload, headers=headers)
+                    response.raise_for_status()
+                    return response.json().get('@events')
+                else:
+                    raise Exception("Re-login failed after 403 error.")
+            else:
+                logging.error(f"Failed to get classes for {target_date_str}: {e}")
+                raise
+        except Exception as e:
+            logging.error(f"An unexpected error occurred in _get_classes_for_single_date for {target_date_str}: {e}")
             raise
 
     def _parse_classes_from_html(self, classes_html, target_date):
