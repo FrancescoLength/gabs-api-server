@@ -6,7 +6,7 @@ __pycache__/
 venv/
 
 # Ignore sensitive configuration
-config.py
+.env
 static_timetable.json
 
 # Ignore temporary debug files

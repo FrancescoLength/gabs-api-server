@@ -7,3 +7,4 @@ APScheduler
 thefuzz
 pywebpush
 SQLAlchemy
+python-dotenv
