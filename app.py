@@ -133,9 +133,18 @@ def send_cancellation_reminders():
             next_occurrence_date = today + timedelta(days=days_until_target)
             current_target_date = next_occurrence_date.strftime("%Y-%m-%d")
 
+            # Combine date and time to create a full datetime object for the class
+            class_datetime_str = f"{current_target_date} {target_time_str}"
+            class_datetime = datetime.strptime(class_datetime_str, "%Y-%m-%d %H:%M")
+
+            # If the calculated class time is in the past, skip this occurrence and look for the next one
+            if class_datetime < datetime.now():
+                logging.info(f"Skipping auto-booking {booking_id} for {class_name} on {current_target_date} at {target_time_str} as the time has already passed.")
+                continue
+
             # If last_booked_date is set, ensure we are looking at the correct occurrence
-            if last_booked_date and last_booked_date != current_target_date:
-                # This booking is for a future occurrence, or already passed for today
+            if last_booked_date and last_booked_date == current_target_date:
+                # This means we already processed this date, skip to avoid re-processing
                 continue
 
             class_datetime = datetime.strptime(f"{current_target_date} {target_time_str}", "%Y-%m-%d %H:%M")
