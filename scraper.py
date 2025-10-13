@@ -187,7 +187,6 @@ class Scraper:
             duration = "N/A"
             if start_time_str != "N/A" and end_time_str != "N/A":
                 try:
-                    from datetime import datetime
                     start_dt = datetime.strptime(start_time_str, '%H:%M')
                     end_dt = datetime.strptime(end_time_str, '%H:%M')
                     # If end_dt is before start_dt, it means it's the next day
@@ -323,117 +322,115 @@ class Scraper:
             logging.error(f"An unexpected error occurred during cancellation process: {e}")
             return {"error": f"An unexpected error occurred: {e}"}
 
+    def _perform_cancellation_on_class(self, gym_class):
+        """Executes the cancellation logic on a given class element."""
+        form = gym_class.find('form', {'data-request': 'onBook'})
+        if not form:
+            return {"status": "error", "message": "Class found, but no form was available."}
+
+        button = gym_class.find('button', {'class': 'cancel'})
+        if not button:
+            return {"status": "error", "message": "You do not appear to be booked on this class, so cancellation is not possible."}
+
+        handler = form.get('data-request')
+        class_id_input = form.find('input', {'name': 'id'})
+        timestamp_input = gym_class.find('input', {'name': 'timestamp'})
+
+        if not (handler and class_id_input and timestamp_input and class_id_input.get('value') and timestamp_input.get('value')):
+            return {"status": "error", "message": "Could not extract required data from the cancellation form."}
+
+        cancellation_payload = {
+            'id': class_id_input.get('value'),
+            'timestamp': timestamp_input.get('value'),
+        }
+        headers = {
+            **BASE_HEADERS,
+            'X-Winter-Request-Handler': handler,
+            'x-csrf-token': self.csrf_token,
+        }
+        
+        logging.info(f"Attempting cancellation for class ID {cancellation_payload['id']}...")
+        response = self.session.post(BOOKING_URL, data=cancellation_payload, headers=headers)
+        response.raise_for_status()
+        
+        if "X_OCTOBER_REDIRECT" not in response.text:
+            logging.info("SUCCESS! The cancellation appears to have been successful.")
+            return {"status": "success", "action": "cancellation", "details": response.json()}
+        else:
+            logging.warning(f"The cancellation failed. Server responded with a redirect.")
+            return {"status": "error", "message": "Action failed. The server responded with a redirect.", "details": response.json()}
+
+    def _perform_cancellation_on_class(self, gym_class):
+        """Executes the cancellation logic on a given class element."""
+        form = gym_class.find('form', {'data-request': 'onBook'})
+        if not form:
+            return {"status": "error", "message": "Class found, but no form was available."}
+
+        button = gym_class.find('button', {'class': 'cancel'})
+        if not button:
+            return {"status": "error", "message": "You do not appear to be booked on this class, so cancellation is not possible."}
+
+        handler = form.get('data-request')
+        class_id_input = form.find('input', {'name': 'id'})
+        timestamp_input = gym_class.find('input', {'name': 'timestamp'})
+
+        if not (handler and class_id_input and timestamp_input and class_id_input.get('value') and timestamp_input.get('value')):
+            return {"status": "error", "message": "Could not extract required data from the cancellation form."}
+
+        cancellation_payload = {
+            'id': class_id_input.get('value'),
+            'timestamp': timestamp_input.get('value'),
+        }
+        headers = {
+            **BASE_HEADERS,
+            'X-Winter-Request-Handler': handler,
+            'x-csrf-token': self.csrf_token,
+        }
+        
+        logging.info(f"Attempting cancellation for class ID {cancellation_payload['id']}...")
+        response = self.session.post(BOOKING_URL, data=cancellation_payload, headers=headers)
+        response.raise_for_status()
+        
+        if "X_OCTOBER_REDIRECT" not in response.text:
+            logging.info("SUCCESS! The cancellation appears to have been successful.")
+            return {"status": "success", "action": "cancellation", "details": response.json()}
+        else:
+            logging.warning(f"The cancellation failed. Server responded with a redirect.")
+            return {"status": "error", "message": "Action failed. The server responded with a redirect.", "details": response.json()}
+
     def _parse_and_execute_cancellation(self, classes_html, class_name, target_time, instructor_name):
-        """Helper method that finds a class and cancels the booking."""
+        """Helper method that finds a class and triggers the cancellation."""
         soup = BeautifulSoup(classes_html, 'html.parser')
         gym_classes = soup.find_all('div', {'class': 'class grid'})
         
-        class_found_in_list = False
         for gym_class in gym_classes:
             title_tag = gym_class.find('h2', {'class': 'title'})
             title = title_tag.text.strip() if title_tag else ""
 
-            # Extract instructor from the current gym_class
-            instructor_from_html = ""
-            p_tags = gym_class.find_all('p')
-            for p in p_tags:
-                if p.text.lower().strip().startswith('with '):
-                    instructor_from_html = p.text.strip()[5:].replace('.', '')
-                    break
-
             start_time_span = gym_class.find('span', {'itemprop': 'startDate'})
             start_time_str = start_time_span.text.strip() if start_time_span else ""
 
+            # Basic match: class name and time must match
             if class_name.lower() in title.lower() and start_time_str == target_time:
-                if instructor_name: # If instructor is provided, match it
+                
+                # If instructor is specified, it must also match
+                if instructor_name:
+                    instructor_from_html = ""
+                    p_tags = gym_class.find_all('p')
+                    for p in p_tags:
+                        if p.text.lower().strip().startswith('with '):
+                            instructor_from_html = p.text.strip()[5:].replace('.', '')
+                            break
+                    
                     if instructor_name.lower() in instructor_from_html.lower():
-                        class_found_in_list = True
-                        logging.info(f"Found matching class: {title}")
-                        
-                        form = gym_class.find('form', {'data-request': 'onBook'})
-                        if not form:
-                            return {"status": "error", "message": "Class found, but no form was available."}
+                        logging.info(f"Found matching class with instructor: {title}")
+                        return self._perform_cancellation_on_class(gym_class)
+                else:
+                    # No instructor specified, so this is our match
+                    logging.info(f"Found matching class: {title}")
+                    return self._perform_cancellation_on_class(gym_class)
 
-                        button = gym_class.find('button', {'class': 'cancel'})
-                        if not button:
-                            return {"status": "error", "message": "You do not appear to be booked on this class, so cancellation is not possible."}
-
-                        handler = form.get('data-request')
-                        class_id_input = form.find('input', {'name': 'id'})
-                        timestamp_input = gym_class.find('input', {'name': 'timestamp'})
-
-                        if not (handler and class_id_input and timestamp_input and class_id_input.get('value') and timestamp_input.get('value')):
-                            return {"status": "error", "message": "Could not extract required data from the cancellation form."}
-
-                        cancellation_payload = {
-                            'id': class_id_input.get('value'),
-                            'timestamp': timestamp_input.get('value'),
-                        }
-                        headers = {
-                            **BASE_HEADERS,
-                            'X-Winter-Request-Handler': handler,
-                            'x-csrf-token': self.csrf_token,
-                        }
-                        
-                        logging.info(f"Attempting cancellation for class ID {cancellation_payload['id']}...")
-                        response = self.session.post(BOOKING_URL, data=cancellation_payload, headers=headers)
-                        response.raise_for_status()
-                        
-                        if "X_OCTOBER_REDIRECT" not in response.text:
-                            logging.info("SUCCESS! The cancellation appears to have been successful.")
-                            return {"status": "success", "action": "cancellation", "details": response.json()}
-                        else:
-                            logging.warning(f"The cancellation failed. Server responded with a redirect.")
-                            return {"status": "error", "message": "Action failed. The server responded with a redirect.", "details": response.json()}
-
-                else: # No instructor specified, just match by class name
-                    start_time_span = gym_class.find('span', {'itemprop': 'startDate'})
-                    start_time_str = start_time_span.text.strip() if start_time_span else ""
-
-                    if class_name.lower() in title.lower() and start_time_str == target_time:
-                        class_found_in_list = True
-                        logging.info(f"Found matching class: {title}")
-                        
-                        form = gym_class.find('form', {'data-request': 'onBook'})
-                        if not form:
-                            return {"status": "error", "message": "Class found, but no form was available."}
-
-                        button = gym_class.find('button', {'class': 'cancel'})
-                        if not button:
-                            return {"status": "error", "message": "You do not appear to be booked on this class, so cancellation is not possible."}
-
-                        handler = form.get('data-request')
-                        class_id_input = form.find('input', {'name': 'id'})
-                        timestamp_input = gym_class.find('input', {'name': 'timestamp'})
-
-                        if not (handler and class_id_input and timestamp_input and class_id_input.get('value') and timestamp_input.get('value')):
-                            return {"status": "error", "message": "Could not extract required data from the cancellation form."}
-
-                        cancellation_payload = {
-                            'id': class_id_input.get('value'),
-                            'timestamp': timestamp_input.get('value'),
-                        }
-                        headers = {
-                            **BASE_HEADERS,
-                            'X-Winter-Request-Handler': handler,
-                            'x-csrf-token': self.csrf_token,
-                        }
-                        
-                        logging.info(f"Attempting cancellation for class ID {cancellation_payload['id']}...")
-                        response = self.session.post(BOOKING_URL, data=cancellation_payload, headers=headers)
-                        response.raise_for_status()
-                        
-                        if "X_OCTOBER_REDIRECT" not in response.text:
-                            logging.info("SUCCESS! The cancellation appears to have been successful.")
-                            return {"status": "success", "action": "cancellation", "details": response.json()}
-                        else:
-                            logging.warning(f"The cancellation failed. Server responded with a redirect.")
-                            return {"status": "error", "message": "Action failed. The server responded with a redirect.", "details": response.json()}
-
-        if not class_found_in_list:
-            return {"status": "error", "message": "Specified class not found on the given date."}
-        
-        return {"status": "error", "message": "An unknown error occurred after finding class."}
+        return {"status": "error", "message": "Specified class not found on the given date."}
 
     def get_my_bookings(self):
         """Scrapes the members area to get a list of current bookings and waiting list entries."""

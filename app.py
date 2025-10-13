@@ -533,8 +533,24 @@ def get_logs():
 @app.route('/api/admin/auto_bookings', methods=['GET'])
 @admin_required
 def get_all_auto_bookings():
-    bookings = database.get_all_auto_bookings()
-    return jsonify(bookings)
+    bookings_raw = database.get_all_auto_bookings()
+    bookings_formatted = []
+    for b in bookings_raw:
+        bookings_formatted.append({
+            "id": b[0],
+            "username": b[1],
+            "class_name": b[2],
+            "target_time": b[3],
+            "status": b[4],
+            "created_at": b[5],
+            "last_attempt_at": b[6],
+            "retry_count": b[7],
+            "day_of_week": b[8],
+            "instructor": b[9],
+            "last_booked_date": b[10],
+            "notification_sent": b[11]
+        })
+    return jsonify(bookings_formatted)
 
 @app.route('/api/admin/push_subscriptions', methods=['GET'])
 @admin_required

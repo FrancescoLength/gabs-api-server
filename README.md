@@ -13,17 +13,22 @@ This Flask-based API server empowers users to seamlessly interact with a famous 
 -   **Instructor Insights:** Browse all instructors and their scheduled classes, with the ability to filter classes by a specific instructor.
 -   **Automated Recurring Bookings:** Schedule and manage recurring auto-bookings for your favorite classes, ensuring you're always signed up.
 -   **Intelligent Push Notifications:** Receive timely push notifications, including crucial cancellation reminders, to help you stay informed and avoid penalties.
+-   **Admin Panel (New!):** Dedicated endpoints for administrators to monitor logs, auto-bookings, push subscriptions, and server status.
 
 ## Setup and Installation
 
 1.  **Prerequisites:**
     -   Python 3.8+
+    -   Git
 
-2.  **Installation:**
+2.  **Clone the Repository:**
     ```bash
-    # Navigate to the project directory
+    git clone https://github.com/FrancescoLength/gabs-api-server.git
     cd gabs_api_server
+    ```
 
+3.  **Install Dependencies:**
+    ```bash
     # (Recommended) Create and activate a virtual environment
     # On Windows:
     python -m venv venv
@@ -37,19 +42,56 @@ This Flask-based API server empowers users to seamlessly interact with a famous 
     pip install -r requirements.txt
     ```
 
-3.  **Configuration:**
-    -   Open the `config.py` file.
-    -   **Important:** Change the default `JWT_SECRET_KEY` to a long, random, and secret string. This is critical for security.
+4.  **Configuration (.env file):**
+    This project uses environment variables to manage sensitive information and configuration.
+    -   Create a file named `.env` in the root of the `gabs_api_server` directory.
+    -   Copy the content from `.env.example` into your new `.env` file.
+    -   Fill in the required values (e.g., `JWT_SECRET_KEY`, `VAPID_PRIVATE_KEY`, `WEBSITE_URL`, etc.). **Do NOT commit your `.env` file to Git!**
 
-4.  **Running the Server:**
-    ```bash
-    python app.py
     ```
-    The API will be running at `http://127.0.0.1:5000`. To make it accessible on your network, it runs on `0.0.0.0`.
+    # Example .env content (fill in your actual values)
+    JWT_SECRET_KEY="your_super_secret_jwt_key"
+    VAPID_PUBLIC_KEY="your_vapid_public_key"
+VAPID_PRIVATE_KEY="your_vapid_private_key"
+VAPID_ADMIN_EMAIL="mailto:your_admin_email@example.com"
+ADMIN_EMAIL="your_admin_email@example.com"
+WEBSITE_URL="https://www.yourgymwebsite.com/"
+    ```
+
+5.  **Generate VAPID Keys (if needed):**
+    If you need to generate new VAPID keys for push notifications, run the provided script:
+    ```bash
+    python generate_vapid_keys_manual.py
+    ```
+    Update your `.env` file with the generated `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`.
+
+## Running the Server
+
+### Development (Local Testing)
+
+For local development and testing, you can use Flask's built-in development server:
+```bash
+python app.py
+```
+**WARNING:** This is a development server. Do not use it in a production deployment. It is not designed for performance, stability, or security in a live environment.
+
+### Production Deployment (Recommended)
+
+For production environments (e.g., on a Raspberry Pi), it is highly recommended to use a production-ready WSGI server like Gunicorn, often paired with a reverse proxy like Nginx.
+
+1.  **Install Gunicorn:**
+    ```bash
+    pip install gunicorn
+    ```
+2.  **Run with Gunicorn:**
+    ```bash
+    gunicorn --workers 3 --bind 0.0.0.0:5000 app:app
+    ```
+    (Adjust `--workers` based on your server's CPU cores, typically `(2 * cores) + 1`).
 
 ## API Endpoints Documentation
 
-All endpoints (except `/api/login`) require an `Authorization: Bearer <token>` header to be sent with the request.
+All endpoints (except `/api/login` and `/api/vapid-public-key`) require an `Authorization: Bearer <token>` header to be sent with the request.
 
 ---
 
@@ -92,7 +134,7 @@ Logs the user out by clearing their session from the server's cache.
 
 #### `GET /api/classes`
 
-Gets a list of all available classes for the next 7 days.
+Gets a list of all available classes for the upcoming 7 days.
 
 -   **Example `curl` Request:**
     ```bash
@@ -264,3 +306,51 @@ Gets a list of all classes taught by a specific instructor.
     ```bash
     curl -H "Authorization: Bearer <token>" "http://127.0.0.1:5000/api/classes-by-instructor?name=George"
     ```
+
+---
+
+### **Admin Endpoints**
+
+These endpoints are restricted to the administrator user defined in the `.env` file.
+
+#### `GET /api/admin/logs`
+
+Retrieves the last 100 lines of the server's log file.
+
+-   **Example `curl` Request:**
+    ```bash
+    curl -H "Authorization: Bearer <admin_token>" http://127.0.0.1:5000/api/admin/logs
+    ```
+
+#### `GET /api/admin/auto_bookings`
+
+Retrieves a list of all scheduled automatic bookings across all users.
+
+-   **Example `curl` Request:**
+    ```bash
+    curl -H "Authorization: Bearer <admin_token>" http://127.0.0.1:5000/api/admin/auto_bookings
+    ```
+
+#### `GET /api/admin/push_subscriptions`
+
+Retrieves a list of all active push subscriptions across all users.
+
+-   **Example `curl` Request:**
+    ```bash
+    curl -H "Authorization: Bearer <admin_token>" http://127.0.0.1:5000/api/admin/push/subscriptions
+    ```
+
+#### `GET /api/admin/status`
+
+Retrieves basic status information about the server, including uptime and scraper cache size.
+
+-   **Example `curl` Request:**
+    ```bash
+    curl -H "Authorization: Bearer <admin_token>" http://127.0.0.1:5000/api/admin/status
+    ```
+
+---
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
