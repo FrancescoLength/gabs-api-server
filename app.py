@@ -97,7 +97,7 @@ def process_auto_bookings():
                 result = user_scraper.find_and_book_class(target_date_str=current_target_date, class_name=class_name, target_time=target_time, instructor=instructor)
                 
                 result_message = result.get('message', '').lower()
-                if result.get('status') == 'success' or (result.get('status') == 'info' and ("already booked" in result_message or "waiting list" in result_message)):
+                if result.get('status') == 'success' or (result.get('status') == 'info' and ("already registered" in result_message or "waiting list" in result_message or "already booked" in result_message)):
                     database.update_auto_booking_status(booking_id, 'pending', last_booked_date=current_target_date, last_attempt_at=int(datetime.now().timestamp()))
                     logging.info(f"Successfully processed booking for auto-booking {booking_id}. Status: {result.get('message')}")
                 else:
