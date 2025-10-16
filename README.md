@@ -89,6 +89,30 @@ For production environments (e.g., on a Raspberry Pi), it is highly recommended 
     ```
     (Adjust `--workers` based on your server's CPU cores, typically `(2 * cores) + 1`).
 
+## Testing
+
+This project uses `pytest` for automated testing. The tests are located in the `tests/` directory and are organized by module.
+
+### Test Coverage
+
+The test suite currently includes over 40 tests, providing good coverage of the application's core functionality. The tests include:
+
+-   **Unit Tests:**
+    -   `tests/test_scraper.py`: Tests the web scraping logic in `scraper.py`, including parsing HTML and handling different booking scenarios.
+    -   `tests/test_database.py`: Tests the database operations in `database.py` using an in-memory SQLite database to ensure test isolation.
+-   **Integration Tests:**
+    -   `tests/test_app.py`: Tests the Flask application's API endpoints, including authentication, protected routes, and the core booking and scheduling functionality.
+
+### Running the Tests
+
+To run the tests, navigate to the `gabs_api_server` directory and run the following command:
+
+```bash
+PYTHONPATH=. pytest
+```
+
+This command will discover and run all the tests in the `tests/` directory.
+
 ## API Endpoints Documentation
 
 All endpoints (except `/api/login` and `/api/vapid-public-key`) require an `Authorization: Bearer <token>` header to be sent with the request.

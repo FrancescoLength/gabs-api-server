@@ -8,3 +8,6 @@ thefuzz
 pywebpush
 SQLAlchemy
 python-dotenv
+pytest
+pytest-mock
+pytest-flask

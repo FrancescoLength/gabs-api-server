@@ -1,0 +1,301 @@
+2025-10-16 23:10:44,220 - INFO - APScheduler started.
+2025-10-16 23:10:44,273 - INFO - Static timetable loaded successfully.
+2025-10-16 23:10:44,438 - ERROR - Failed to retrieve CSRF token: Network Error
+2025-10-16 23:10:44,443 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:10:44,444 - INFO - Login successful for test_user!
+2025-10-16 23:10:44,448 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:10:44,449 - ERROR - An error occurred during login for test_user: Login failed. Server responded with: <Mock name='mock.post().text' id='140148554289008'>
+2025-10-16 23:10:44,489 - WARNING - Redirect received for 2025-10-26, attempting to re-login...
+2025-10-16 23:10:44,496 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:10:44,497 - INFO - Attempting booking for class ID 123...
+2025-10-16 23:10:44,498 - INFO - SUCCESS! The booking appears to have been successful.
+2025-10-16 23:10:44,503 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:10:44,507 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:11:06,333 - INFO - APScheduler started.
+2025-10-16 23:11:06,342 - INFO - Static timetable loaded successfully.
+2025-10-16 23:11:06,429 - INFO - Login attempt for user: test_user
+2025-10-16 23:11:06,431 - INFO - Successfully created session and token for test_user
+2025-10-16 23:11:06,436 - INFO - Login attempt for user: test_user
+2025-10-16 23:11:06,437 - ERROR - Failed login for user test_user: Login failed
+2025-10-16 23:11:06,478 - ERROR - Failed to retrieve CSRF token: Network Error
+2025-10-16 23:11:06,508 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:11:06,509 - INFO - Login successful for test_user!
+2025-10-16 23:11:06,513 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:11:06,514 - ERROR - An error occurred during login for test_user: Login failed. Server responded with: <Mock name='mock.post().text' id='140707721454992'>
+2025-10-16 23:11:06,523 - WARNING - Redirect received for 2025-10-26, attempting to re-login...
+2025-10-16 23:11:06,529 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:11:06,530 - INFO - Attempting booking for class ID 123...
+2025-10-16 23:11:06,531 - INFO - SUCCESS! The booking appears to have been successful.
+2025-10-16 23:11:06,535 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:11:06,539 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:11:35,061 - INFO - APScheduler started.
+2025-10-16 23:11:35,067 - INFO - Static timetable loaded successfully.
+2025-10-16 23:11:35,167 - INFO - Login attempt for user: test_user
+2025-10-16 23:11:35,168 - INFO - Successfully created session and token for test_user
+2025-10-16 23:11:35,175 - INFO - Login attempt for user: test_user
+2025-10-16 23:11:35,175 - ERROR - Failed login for user test_user: Login failed
+2025-10-16 23:11:35,182 - INFO - Login attempt for user: test_user
+2025-10-16 23:11:35,183 - INFO - Successfully created session and token for test_user
+2025-10-16 23:11:35,249 - ERROR - Failed to retrieve CSRF token: Network Error
+2025-10-16 23:11:35,253 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:11:35,254 - INFO - Login successful for test_user!
+2025-10-16 23:11:35,258 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:11:35,259 - ERROR - An error occurred during login for test_user: Login failed. Server responded with: <Mock name='mock.post().text' id='140551761948304'>
+2025-10-16 23:11:35,267 - WARNING - Redirect received for 2025-10-26, attempting to re-login...
+2025-10-16 23:11:35,272 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:11:35,273 - INFO - Attempting booking for class ID 123...
+2025-10-16 23:11:35,274 - INFO - SUCCESS! The booking appears to have been successful.
+2025-10-16 23:11:35,279 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:11:35,283 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:13:27,974 - INFO - APScheduler started.
+2025-10-16 23:13:27,976 - INFO - Static timetable loaded successfully.
+2025-10-16 23:13:28,062 - INFO - Login attempt for user: test_user
+2025-10-16 23:13:28,062 - INFO - Successfully created session and token for test_user
+2025-10-16 23:13:28,067 - INFO - Login attempt for user: test_user
+2025-10-16 23:13:28,068 - ERROR - Failed login for user test_user: Login failed
+2025-10-16 23:13:28,074 - INFO - Login attempt for user: test_user
+2025-10-16 23:13:28,075 - INFO - Successfully created session and token for test_user
+2025-10-16 23:13:28,124 - INFO - Login attempt for user: test_user
+2025-10-16 23:13:28,125 - INFO - Successfully created session and token for test_user
+2025-10-16 23:13:28,127 - INFO - Recurring auto-booking scheduled for user test_user: Class Test Class on Monday at 10:00. Booking ID: 1
+2025-10-16 23:13:28,133 - INFO - Login attempt for user: test_user
+2025-10-16 23:13:28,134 - INFO - Successfully created session and token for test_user
+2025-10-16 23:13:28,190 - ERROR - Failed to retrieve CSRF token: Network Error
+2025-10-16 23:13:28,203 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:13:28,204 - INFO - Login successful for test_user!
+2025-10-16 23:13:28,213 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:13:28,214 - ERROR - An error occurred during login for test_user: Login failed. Server responded with: <Mock name='mock.post().text' id='140534202134880'>
+2025-10-16 23:13:28,227 - WARNING - Redirect received for 2025-10-26, attempting to re-login...
+2025-10-16 23:13:28,236 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:13:28,237 - INFO - Attempting booking for class ID 123...
+2025-10-16 23:13:28,238 - INFO - SUCCESS! The booking appears to have been successful.
+2025-10-16 23:13:28,244 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:13:28,251 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:14:03,134 - INFO - APScheduler started.
+2025-10-16 23:14:03,136 - INFO - Static timetable loaded successfully.
+2025-10-16 23:14:03,273 - INFO - Login attempt for user: test_user
+2025-10-16 23:14:03,274 - INFO - Successfully created session and token for test_user
+2025-10-16 23:14:03,280 - INFO - Login attempt for user: test_user
+2025-10-16 23:14:03,280 - ERROR - Failed login for user test_user: Login failed
+2025-10-16 23:14:03,286 - INFO - Login attempt for user: test_user
+2025-10-16 23:14:03,287 - INFO - Successfully created session and token for test_user
+2025-10-16 23:14:03,300 - INFO - Login attempt for user: test_user
+2025-10-16 23:14:03,300 - INFO - Successfully created session and token for test_user
+2025-10-16 23:14:03,302 - INFO - Recurring auto-booking scheduled for user test_user: Class Test Class on Monday at 10:00. Booking ID: 1
+2025-10-16 23:14:03,308 - INFO - Login attempt for user: test_user
+2025-10-16 23:14:03,309 - INFO - Successfully created session and token for test_user
+2025-10-16 23:14:03,318 - INFO - Login attempt for user: test_user
+2025-10-16 23:14:03,318 - INFO - Successfully created session and token for test_user
+2025-10-16 23:14:03,327 - INFO - Login attempt for user: test_user
+2025-10-16 23:14:03,328 - INFO - Successfully created session and token for test_user
+2025-10-16 23:14:03,330 - INFO - Auto-booking ID 1 cancelled by user test_user.
+2025-10-16 23:14:03,336 - INFO - Login attempt for user: test_user
+2025-10-16 23:14:03,337 - INFO - Successfully created session and token for test_user
+2025-10-16 23:14:03,389 - ERROR - Failed to retrieve CSRF token: Network Error
+2025-10-16 23:14:03,398 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:14:03,399 - INFO - Login successful for test_user!
+2025-10-16 23:14:03,405 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:14:03,407 - ERROR - An error occurred during login for test_user: Login failed. Server responded with: <Mock name='mock.post().text' id='139705368329568'>
+2025-10-16 23:14:03,420 - WARNING - Redirect received for 2025-10-26, attempting to re-login...
+2025-10-16 23:14:03,426 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:14:03,428 - INFO - Attempting booking for class ID 123...
+2025-10-16 23:14:03,429 - INFO - SUCCESS! The booking appears to have been successful.
+2025-10-16 23:14:03,434 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:14:03,439 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:16:25,702 - INFO - APScheduler started.
+2025-10-16 23:16:25,709 - INFO - Static timetable loaded successfully.
+2025-10-16 23:16:25,881 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:25,882 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:25,887 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:25,887 - ERROR - Failed login for user test_user: Login failed
+2025-10-16 23:16:25,893 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:25,894 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:25,903 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:25,904 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:25,906 - INFO - Recurring auto-booking scheduled for user test_user: Class Test Class on Monday at 10:00. Booking ID: 1
+2025-10-16 23:16:25,912 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:25,912 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:25,921 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:25,922 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:25,930 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:25,931 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:25,933 - INFO - Auto-booking ID 1 cancelled by user test_user.
+2025-10-16 23:16:25,939 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:25,940 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:25,948 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:25,949 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:25,957 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:25,958 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:25,960 - ERROR - Unhandled error in /api/instructors for user test_user: 'name'
+2025-10-16 23:16:26,034 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:26,035 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:26,043 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:26,044 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:26,045 - INFO - Removed session for user: test_user
+2025-10-16 23:16:26,057 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:26,058 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:26,060 - INFO - Push subscription saved for user: test_user
+2025-10-16 23:16:26,065 - INFO - Login attempt for user: admin@example.com
+2025-10-16 23:16:26,066 - INFO - Successfully created session and token for admin@example.com
+2025-10-16 23:16:26,069 - INFO - User admin@example.com is requesting to send a test push notification.
+2025-10-16 23:16:26,104 - ERROR - Failed to retrieve CSRF token: Network Error
+2025-10-16 23:16:26,108 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:16:26,108 - INFO - Login successful for test_user!
+2025-10-16 23:16:26,113 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:16:26,114 - ERROR - An error occurred during login for test_user: Login failed. Server responded with: <Mock name='mock.post().text' id='139755458541120'>
+2025-10-16 23:16:26,122 - WARNING - Redirect received for 2025-10-26, attempting to re-login...
+2025-10-16 23:16:26,127 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:16:26,128 - INFO - Attempting booking for class ID 123...
+2025-10-16 23:16:26,129 - INFO - SUCCESS! The booking appears to have been successful.
+2025-10-16 23:16:26,133 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:16:26,137 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:16:51,724 - INFO - APScheduler started.
+2025-10-16 23:16:51,731 - INFO - Static timetable loaded successfully.
+2025-10-16 23:16:51,882 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,883 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,889 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,890 - ERROR - Failed login for user test_user: Login failed
+2025-10-16 23:16:51,896 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,897 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,908 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,909 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,911 - INFO - Recurring auto-booking scheduled for user test_user: Class Test Class on Monday at 10:00. Booking ID: 1
+2025-10-16 23:16:51,917 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,917 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,925 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,926 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,934 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,935 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,937 - INFO - Auto-booking ID 1 cancelled by user test_user.
+2025-10-16 23:16:51,941 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,942 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,947 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,948 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,955 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,956 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,962 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,963 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,967 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,968 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,970 - INFO - Removed session for user: test_user
+2025-10-16 23:16:51,979 - INFO - Login attempt for user: test_user
+2025-10-16 23:16:51,980 - INFO - Successfully created session and token for test_user
+2025-10-16 23:16:51,982 - INFO - Push subscription saved for user: test_user
+2025-10-16 23:16:51,988 - INFO - Login attempt for user: admin@example.com
+2025-10-16 23:16:51,989 - INFO - Successfully created session and token for admin@example.com
+2025-10-16 23:16:51,990 - INFO - User admin@example.com is requesting to send a test push notification.
+2025-10-16 23:16:52,025 - ERROR - Failed to retrieve CSRF token: Network Error
+2025-10-16 23:16:52,029 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:16:52,030 - INFO - Login successful for test_user!
+2025-10-16 23:16:52,035 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:16:52,036 - ERROR - An error occurred during login for test_user: Login failed. Server responded with: <Mock name='mock.post().text' id='139899587689632'>
+2025-10-16 23:16:52,044 - WARNING - Redirect received for 2025-10-26, attempting to re-login...
+2025-10-16 23:16:52,049 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:16:52,050 - INFO - Attempting booking for class ID 123...
+2025-10-16 23:16:52,051 - INFO - SUCCESS! The booking appears to have been successful.
+2025-10-16 23:16:52,054 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:16:52,058 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:20:48,162 - INFO - APScheduler started.
+2025-10-16 23:20:48,164 - INFO - Static timetable loaded successfully.
+2025-10-16 23:20:48,285 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,286 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,292 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,292 - ERROR - Failed login for user test_user: Login failed
+2025-10-16 23:20:48,298 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,299 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,307 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,308 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,310 - INFO - Recurring auto-booking scheduled for user test_user: Class Test Class on Monday at 10:00. Booking ID: 1
+2025-10-16 23:20:48,313 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,314 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,319 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,320 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,327 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,328 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,330 - INFO - Auto-booking ID 1 cancelled by user test_user.
+2025-10-16 23:20:48,335 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,336 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,342 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,343 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,350 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,350 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,358 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,359 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,366 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,367 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,368 - INFO - Removed session for user: test_user
+2025-10-16 23:20:48,377 - INFO - Login attempt for user: test_user
+2025-10-16 23:20:48,378 - INFO - Successfully created session and token for test_user
+2025-10-16 23:20:48,380 - INFO - Push subscription saved for user: test_user
+2025-10-16 23:20:48,388 - INFO - Login attempt for user: admin@example.com
+2025-10-16 23:20:48,389 - INFO - Successfully created session and token for admin@example.com
+2025-10-16 23:20:48,391 - INFO - User admin@example.com is requesting to send a test push notification.
+2025-10-16 23:20:48,429 - ERROR - Failed to retrieve CSRF token: Network Error
+2025-10-16 23:20:48,432 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:20:48,433 - INFO - Login successful for test_user!
+2025-10-16 23:20:48,436 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:20:48,438 - ERROR - An error occurred during login for test_user: Login failed. Server responded with: <Mock name='mock.post().text' id='140205097908784'>
+2025-10-16 23:20:48,445 - WARNING - Redirect received for 2025-10-26, attempting to re-login...
+2025-10-16 23:20:48,450 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:20:48,451 - INFO - Attempting booking for class ID 123...
+2025-10-16 23:20:48,452 - INFO - SUCCESS! The booking appears to have been successful.
+2025-10-16 23:20:48,455 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:20:48,459 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:20:48,466 - INFO - Attempting to cancel 'Test Class' at 10:00 on 2025-10-26
+2025-10-16 23:20:48,470 - INFO - Attempting to scrape members area for bookings...
+2025-10-16 23:20:48,472 - INFO - Successfully parsed 2 bookings.
+2025-10-16 23:21:48,280 - INFO - APScheduler started.
+2025-10-16 23:21:48,282 - INFO - Static timetable loaded successfully.
+2025-10-16 23:21:48,414 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,415 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,419 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,419 - ERROR - Failed login for user test_user: Login failed
+2025-10-16 23:21:48,425 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,425 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,434 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,435 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,436 - INFO - Recurring auto-booking scheduled for user test_user: Class Test Class on Monday at 10:00. Booking ID: 1
+2025-10-16 23:21:48,441 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,442 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,449 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,450 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,457 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,458 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,460 - INFO - Auto-booking ID 1 cancelled by user test_user.
+2025-10-16 23:21:48,465 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,466 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,472 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,473 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,480 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,482 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,488 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,489 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,496 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,496 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,498 - INFO - Removed session for user: test_user
+2025-10-16 23:21:48,507 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,508 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,510 - INFO - Push subscription saved for user: test_user
+2025-10-16 23:21:48,517 - INFO - Login attempt for user: admin@example.com
+2025-10-16 23:21:48,518 - INFO - Successfully created session and token for admin@example.com
+2025-10-16 23:21:48,519 - INFO - User admin@example.com is requesting to send a test push notification.
+2025-10-16 23:21:48,526 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,527 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,528 - INFO - User test_user attempting to book class Test Class on 2025-10-26 at 10:00
+2025-10-16 23:21:48,534 - INFO - Login attempt for user: test_user
+2025-10-16 23:21:48,535 - INFO - Successfully created session and token for test_user
+2025-10-16 23:21:48,536 - INFO - User test_user attempting to cancel class Test Class on 2025-10-26 at 10:00
+2025-10-16 23:21:48,579 - ERROR - Failed to retrieve CSRF token: Network Error
+2025-10-16 23:21:48,584 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:21:48,585 - INFO - Login successful for test_user!
+2025-10-16 23:21:48,594 - INFO - Attempting to establish session and log in for test_user...
+2025-10-16 23:21:48,595 - ERROR - An error occurred during login for test_user: Login failed. Server responded with: <Mock name='mock.post().text' id='140062141176304'>
+2025-10-16 23:21:48,605 - WARNING - Redirect received for 2025-10-26, attempting to re-login...
+2025-10-16 23:21:48,611 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:21:48,612 - INFO - Attempting booking for class ID 123...
+2025-10-16 23:21:48,613 - INFO - SUCCESS! The booking appears to have been successful.
+2025-10-16 23:21:48,617 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:21:48,621 - INFO - Found best match for 'Test Class': 'Test Class' with score 100
+2025-10-16 23:21:48,629 - INFO - Attempting to cancel 'Test Class' at 10:00 on 2025-10-26
+2025-10-16 23:21:48,632 - INFO - Attempting to scrape members area for bookings...
+2025-10-16 23:21:48,634 - INFO - Successfully parsed 2 bookings.
