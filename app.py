@@ -120,7 +120,7 @@ def process_auto_bookings():
 def send_cancellation_reminders():
     with app.app_context():
         upcoming_bookings = database.get_upcoming_bookings_for_notification()
-        
+
         for booking in upcoming_bookings:
             booking_id, username, class_name, target_time_str, day_of_week, instructor, last_booked_date, notification_sent = booking
 
@@ -128,7 +128,7 @@ def send_cancellation_reminders():
             today = datetime.now()
             days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
             target_day_index = days_of_week_map[day_of_week]
-            
+
             days_until_target = (target_day_index - today.weekday() + 7) % 7
             next_occurrence_date = today + timedelta(days=days_until_target)
             current_target_date = next_occurrence_date.strftime("%Y-%m-%d")
@@ -137,9 +137,15 @@ def send_cancellation_reminders():
             class_datetime_str = f"{current_target_date} {target_time_str}"
             class_datetime = datetime.strptime(class_datetime_str, "%Y-%m-%d %H:%M")
 
-            # If the calculated class time is in the past, skip this occurrence and look for the next one
+            # If the calculated class time is in the past, it's an expired booking.
             if class_datetime < datetime.now():
-                logging.info(f"Skipping auto-booking {booking_id} for {class_name} on {current_target_date} at {target_time_str} as the time has already passed.")
+                # Check if the last_booked_date is today. If so, the booking has been processed.
+                # If not, it's a missed booking.
+                if last_booked_date != current_target_date:
+                    logging.warning(f"Auto-booking {booking_id} for {class_name} on {current_target_date} at {target_time_str} was missed.")
+                    # Mark as expired by updating the last_booked_date. This will prevent it from being picked up again.
+                    database.update_auto_booking_status(booking_id, 'pending', last_booked_date=current_target_date)
+                # In either case, we skip the reminder.
                 continue
 
             # If last_booked_date is set, ensure we are looking at the correct occurrence
@@ -147,14 +153,13 @@ def send_cancellation_reminders():
                 # This means we already processed this date, skip to avoid re-processing
                 continue
 
-            class_datetime = datetime.strptime(f"{current_target_date} {target_time_str}", "%Y-%m-%d %H:%M")
             cancellation_deadline = class_datetime - timedelta(minutes=180)
             notification_time = cancellation_deadline - timedelta(minutes=30)
 
             if notification_time <= datetime.now() < cancellation_deadline:
                 logging.info(f"Sending cancellation reminder for booking {booking_id} for user {username}")
                 subscriptions = database.get_push_subscriptions_for_user(username)
-                
+
                 for sub in subscriptions:
                     try:
                         webpush(
@@ -165,7 +170,7 @@ def send_cancellation_reminders():
                                 "icon": "/favicon.png",
                                 "badge": "/favicon.png",
                                 "tag": f"cancellation-reminder-{booking_id}",
-                                "url": "/my-bookings" # Optional: URL to open when notification is clicked
+                                "url": "/my-bookings"
                             }),
                             vapid_private_key=config.VAPID_PRIVATE_KEY,
                             vapid_claims={"sub": config.VAPID_ADMIN_EMAIL}
@@ -173,15 +178,12 @@ def send_cancellation_reminders():
                         logging.info(f"Push notification sent for booking {booking_id} to user {username}")
                     except Exception as e:
                         logging.error(f"Error sending push notification to {sub['endpoint']} for user {username}: {e}")
-                        # If the subscription is no longer valid, delete it from the database
-                        if "410" in str(e): # GONE status code for invalid subscription
+                        if "410" in str(e):
                             database.delete_push_subscription(sub['endpoint'])
                             logging.info(f"Deleted invalid push subscription for user {username}: {sub['endpoint']}")
-                
-                # Mark notification as sent for this booking
+
                 database.update_auto_booking_status(booking_id, 'pending', notification_sent=1)
-            elif datetime.now() >= cancellation_deadline and notification_sent == 0: # Check if notification_sent is 0
-                # If cancellation deadline passed and notification was not sent, mark it as sent to avoid re-processing
+            elif datetime.now() >= cancellation_deadline and notification_sent == 0:
                 database.update_auto_booking_status(booking_id, 'pending', notification_sent=1)
 
 scheduler.add_job(process_auto_bookings, 'interval', minutes=1, id='auto_booking_processor', replace_existing=True)
