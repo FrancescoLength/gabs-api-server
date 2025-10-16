@@ -186,8 +186,20 @@ def send_cancellation_reminders():
             elif datetime.now() >= cancellation_deadline and notification_sent == 0:
                 database.update_auto_booking_status(booking_id, 'pending', notification_sent=1)
 
+def reset_failed_bookings():
+    with app.app_context():
+        failed_bookings = database.get_failed_auto_bookings()
+        for booking in failed_bookings:
+            booking_id, last_attempt_at = booking
+            if last_attempt_at:
+                # Reset if the last attempt was more than 24 hours ago
+                if (datetime.now().timestamp() - last_attempt_at) > (24 * 60 * 60):
+                    logging.info(f"Resetting failed auto-booking {booking_id} to 'pending'.")
+                    database.update_auto_booking_status(booking_id, 'pending', retry_count=0)
+
 scheduler.add_job(process_auto_bookings, 'interval', minutes=1, id='auto_booking_processor', replace_existing=True)
 scheduler.add_job(send_cancellation_reminders, 'interval', minutes=1, id='cancellation_reminder_sender', replace_existing=True)
+scheduler.add_job(reset_failed_bookings, 'interval', hours=24, id='reset_failed_bookings_job', replace_existing=True)
 scheduler.start()
 logging.info("APScheduler started.")
 

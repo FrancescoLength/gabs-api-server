@@ -181,6 +181,14 @@ def get_all_auto_bookings():
     conn.close()
     return bookings
 
+def get_failed_auto_bookings():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, last_attempt_at FROM auto_bookings WHERE status = 'failed'")
+    bookings = cursor.fetchall()
+    conn.close()
+    return bookings
+
 if __name__ == '__main__':
     init_db()
     print("Database initialized and table 'auto_bookings' updated.")
