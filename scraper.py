@@ -11,11 +11,15 @@ BASE_URL = config.WEBSITE_URL
 LOGIN_URL = BASE_URL + 'login'
 MEMBERS_URL = BASE_URL + 'members'
 BOOKING_URL = BASE_URL + 'book-classes'
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
 BASE_HEADERS = {
-    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+    'User-Agent': USER_AGENT,
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Origin': BASE_URL.rstrip('/'),
     'X-Requested-With': 'XMLHttpRequest',
-    'User-Agent': USER_AGENT
+    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
 }
 
 class Scraper:
@@ -32,7 +36,13 @@ class Scraper:
     def _get_csrf_token(self):
         """Fetch the CSRF token from the meta tag."""
         try:
-            response = self.session.get(LOGIN_URL, headers={'User-Agent': USER_AGENT})
+            headers = {
+                'User-Agent': USER_AGENT,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+            }
+            response = self.session.get(LOGIN_URL, headers=headers)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             token = soup.find('meta', {'name': 'csrf-token'})['content']
@@ -59,6 +69,7 @@ class Scraper:
             }
             headers = {
                 **BASE_HEADERS,
+                'Referer': LOGIN_URL,
                 'X-Winter-Request-Handler': 'onSignin',
                 'x-csrf-token': self.csrf_token,
             }
