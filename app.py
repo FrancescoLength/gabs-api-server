@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import logging
@@ -530,10 +531,32 @@ def test_push_notification():
 @app.route('/api/admin/logs', methods=['GET'])
 @admin_required
 def get_logs():
+    # Regex to parse log lines: captures timestamp, level, and message
+    log_pattern = re.compile(r'^(\S+ \S+) - (\w+) - (.*)')
+    
     try:
         with open(LOG_FILE, 'r') as f:
             lines = f.readlines()
-            return jsonify(lines[-100:]) # Return last 100 lines
+            parsed_logs = []
+            for line in reversed(lines[-100:]): # Reverse to show newest first
+                match = log_pattern.match(line.strip())
+                if match:
+                    parsed_logs.append({
+                        "timestamp": match.group(1),
+                        "level": match.group(2),
+                        "message": match.group(3)
+                    })
+                elif line.strip(): # Handle lines that don't match (e.g., tracebacks)
+                    # Append to the previous message if it exists, else create a new entry
+                    if parsed_logs and parsed_logs[-1]['level'] in ['RAW', 'RAW_MULTI']:
+                        parsed_logs[-1]['message'] += '\n' + line.strip()
+                    else:
+                         parsed_logs.append({
+                            "timestamp": "",
+                            "level": "RAW",
+                            "message": line.strip()
+                        })
+            return jsonify({"logs": parsed_logs})
     except FileNotFoundError:
         return jsonify({"error": "Log file not found."}), 404
 
