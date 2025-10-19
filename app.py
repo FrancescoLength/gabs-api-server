@@ -17,27 +17,10 @@ from pywebpush import webpush
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
+from logging_config import setup_logging
+
 # Configure logging
-log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-log_file = 'gabs_api.log'
-
-# File handler
-file_handler = RotatingFileHandler(log_file, maxBytes=1024 * 1024 * 5, backupCount=2) # 5 MB per file, 2 backups
-file_handler.setFormatter(log_formatter)
-file_handler.setLevel(logging.INFO)
-
-# Console handler
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(log_formatter)
-console_handler.setLevel(logging.INFO)
-
-# Root logger
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.INFO)
-root_logger.addHandler(file_handler)
-root_logger.addHandler(console_handler)
-
-logging.getLogger('apscheduler').setLevel(logging.WARNING)
+setup_logging()
 
 app = Flask(__name__)
 app.start_time = datetime.now()
