@@ -13,3 +13,4 @@ static_timetable.json
 *.html
 *.json
 auto_bookings.db
+gabs_api.log
