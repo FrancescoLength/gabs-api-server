@@ -197,14 +197,15 @@ def reset_failed_bookings():
                     logging.info(f"Resetting failed auto-booking {booking_id} to 'pending'.")
                     database.update_auto_booking_status(booking_id, 'pending', retry_count=0)
 
-scheduler.add_job(process_auto_bookings, 'interval', minutes=1, id='auto_booking_processor', replace_existing=True)
-scheduler.add_job(send_cancellation_reminders, 'interval', minutes=1, id='cancellation_reminder_sender', replace_existing=True)
-scheduler.add_job(reset_failed_bookings, 'interval', hours=24, id='reset_failed_bookings_job', replace_existing=True)
-scheduler.start()
-logging.info("APScheduler started.")
+# The jobs are now added and started by the standalone scheduler_runner.py process
+# scheduler.add_job(process_auto_bookings, 'interval', minutes=1, id='auto_booking_processor', replace_existing=True)
+# scheduler.add_job(send_cancellation_reminders, 'interval', minutes=1, id='cancellation_reminder_sender', replace_existing=True)
+# scheduler.add_job(reset_failed_bookings, 'interval', hours=24, id='reset_failed_bookings_job', replace_existing=True)
+# scheduler.start()
+# logging.info("APScheduler started.")
 
-import atexit
-atexit.register(lambda: scheduler.shutdown())
+# import atexit
+# atexit.register(lambda: scheduler.shutdown())
 
 app.config["JWT_SECRET_KEY"] = config.JWT_SECRET_KEY
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
