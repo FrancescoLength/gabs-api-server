@@ -2,6 +2,8 @@ import logging
 from logging.handlers import RotatingFileHandler
 import sys
 
+LOG_FILE = 'gabs_api.log'
+
 def setup_logging():
     """
     Configures the root logger for the application.
@@ -12,10 +14,9 @@ def setup_logging():
         return
 
     log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    log_file = 'gabs_api.log'
 
     # File handler
-    file_handler = RotatingFileHandler(log_file, maxBytes=1024 * 1024 * 5, backupCount=2)
+    file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1024 * 1024 * 5, backupCount=2)
     file_handler.setFormatter(log_formatter)
     file_handler.setLevel(logging.INFO)
 

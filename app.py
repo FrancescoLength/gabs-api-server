@@ -17,7 +17,7 @@ from pywebpush import webpush
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
-from logging_config import setup_logging
+from logging_config import setup_logging, LOG_FILE
 
 # Configure logging
 setup_logging()
@@ -531,7 +531,7 @@ def test_push_notification():
 @admin_required
 def get_logs():
     try:
-        with open(log_file, 'r') as f:
+        with open(LOG_FILE, 'r') as f:
             lines = f.readlines()
             return jsonify(lines[-100:]) # Return last 100 lines
     except FileNotFoundError:
