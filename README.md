@@ -6,14 +6,22 @@ This Flask-based API server empowers users to seamlessly interact with a famous 
 
 -   **Secure User Authentication:** Utilizes JWT for secure user login and session management.
 -   **Comprehensive Class Overview:** Access a real-time list of available gym classes for the upcoming 7 days.
--   **Effortless Booking & Waitlisting:** Book classes directly or automatically join the waiting list if a class is full, ensuring you never miss a spot.
--   **Streamlined Cancellation:** Easily cancel existing bookings or remove yourself from waiting lists.
--   **Personalized Booking Management:** View all your upcoming class bookings and waiting list entries in one place.
+-   **Effortless Booking & Waitlisting:** Book classes directly or automatically join the waiting list if a class is full.
+-   **Streamlined Cancellation:** Easily cancel existing bookings.
+-   **Personalized Booking Management:** View all your upcoming class bookings and waiting list entries.
 -   **Real-time Availability Checks:** Instantly check the number of remaining spaces for any specific class.
--   **Instructor Insights:** Browse all instructors and their scheduled classes, with the ability to filter classes by a specific instructor.
--   **Automated Recurring Bookings:** Schedule and manage recurring auto-bookings for your favorite classes, ensuring you're always signed up.
--   **Intelligent Push Notifications:** Receive timely push notifications, including crucial cancellation reminders, to help you stay informed and avoid penalties.
--   **Admin Panel (New!):** Dedicated endpoints for administrators to monitor logs, auto-bookings, push subscriptions, and server status.
+-   **Automated Recurring Bookings:** Schedule and manage recurring auto-bookings for your favorite classes. The scheduler runs in a dedicated process to ensure time-critical bookings are handled with high precision and concurrency.
+-   **Intelligent Push Notifications:** Receive timely push notifications, including crucial cancellation reminders.
+-   **Admin Panel:** Dedicated endpoints for administrators to monitor logs, auto-bookings, push subscriptions, and server status.
+
+## Architecture Overview
+
+The application is designed with a decoupled architecture to ensure stability and performance, especially for time-sensitive tasks.
+
+-   **`app.py`**: The core Flask web application. Its sole responsibility is to handle incoming API requests from the client. It does not run any background jobs itself.
+-   **`scheduler_runner.py`**: A standalone, dedicated process that runs the APScheduler for all background tasks. It uses a thread pool to execute jobs concurrently, which is critical for handling multiple auto-booking requests for the same class without delays.
+-   **`logging_config.py`**: A centralized module that provides a consistent logging format for both the web server and the scheduler processes.
+-   **`scraper.py`**: A robust web scraping client that handles all interactions with the gym's website, including advanced headers to mimic a real browser and prevent blocking.
 
 ## Setup and Installation
 
@@ -30,11 +38,6 @@ This Flask-based API server empowers users to seamlessly interact with a famous 
 3.  **Install Dependencies:**
     ```bash
     # (Recommended) Create and activate a virtual environment
-    # On Windows:
-    python -m venv venv
-    venv\Scripts\activate
-    
-    # On Mac/Linux:
     python3 -m venv venv
     source venv/bin/activate
 
@@ -45,18 +48,7 @@ This Flask-based API server empowers users to seamlessly interact with a famous 
 4.  **Configuration (.env file):**
     This project uses environment variables to manage sensitive information and configuration.
     -   Create a file named `.env` in the root of the `gabs_api_server` directory.
-    -   Copy the content from `.env.example` into your new `.env` file.
-    -   Fill in the required values (e.g., `JWT_SECRET_KEY`, `VAPID_PRIVATE_KEY`, `WEBSITE_URL`, etc.). **Do NOT commit your `.env` file to Git!**
-
-    ```
-    # Example .env content (fill in your actual values)
-    JWT_SECRET_KEY="your_super_secret_jwt_key"
-    VAPID_PUBLIC_KEY="your_vapid_public_key"
-VAPID_PRIVATE_KEY="your_vapid_private_key"
-VAPID_ADMIN_EMAIL="mailto:your_admin_email@example.com"
-ADMIN_EMAIL="your_admin_email@example.com"
-WEBSITE_URL="https://www.yourgymwebsite.com/"
-    ```
+    -   Copy the content from `.env.example` and fill in the required values (e.g., `JWT_SECRET_KEY`, `VAPID_PRIVATE_KEY`, etc.).
 
 5.  **Generate VAPID Keys (if needed):**
     If you need to generate new VAPID keys for push notifications, run the provided script:
@@ -69,25 +61,42 @@ WEBSITE_URL="https://www.yourgymwebsite.com/"
 
 ### Development (Local Testing)
 
-For local development and testing, you can use Flask's built-in development server:
-```bash
-python app.py
-```
-**WARNING:** This is a development server. Do not use it in a production deployment. It is not designed for performance, stability, or security in a live environment.
+For local development, you need to run two separate processes in two different terminals.
 
-### Production Deployment (Recommended)
-
-For production environments (e.g., on a Raspberry Pi), it is highly recommended to use a production-ready WSGI server like Gunicorn, often paired with a reverse proxy like Nginx.
-
-1.  **Install Gunicorn:**
+1.  **Terminal 1: Start the Scheduler**
     ```bash
-    pip install gunicorn
+    source venv/bin/activate
+    python scheduler_runner.py
     ```
-2.  **Run with Gunicorn:**
+
+2.  **Terminal 2: Start the Flask Development Server**
     ```bash
-    gunicorn --workers 3 --bind 0.0.0.0:5000 app:app
+    source venv/bin/activate
+    python app.py
     ```
-    (Adjust `--workers` based on your server's CPU cores, typically `(2 * cores) + 1`).
+
+### Production Deployment
+
+In a production environment (like a Raspberry Pi), the application **must** be run as two separate, long-running processes. Using a tool like `screen` or `systemd` is highly recommended.
+
+1.  **Process 1: The Scheduler**
+    This process handles all time-critical background jobs.
+    ```bash
+    # Activate the environment
+    source venv/bin/activate
+    # Run the scheduler
+    python3 scheduler_runner.py
+    ```
+
+2.  **Process 2: The Web Server (Gunicorn)**
+    This process serves the API to the client application.
+    ```bash
+    # Activate the environment
+    source venv/bin/activate
+    # Run Gunicorn with 2-3 workers
+    gunicorn -w 2 -b 0.0.0.0:5000 app:app
+    ```
+    *(Note: A worker count of 2 or 3 is a safe starting point for a Raspberry Pi. Adjust as needed.)*
 
 ## Testing
 
