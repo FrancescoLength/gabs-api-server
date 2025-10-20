@@ -158,6 +158,76 @@ def process_auto_bookings():
                     database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
                     logging.error(f"Error during booking attempt for auto-booking {booking_id}: {e}. Marking as failed after {new_retry_count} retries.")
 
+def send_cancellation_reminders():
+    with app.app_context():
+        logging.info("Running send_cancellation_reminders job.")
+        bookings_to_remind = database.get_upcoming_bookings_for_notification()
+        now = datetime.now()
+
+        for booking in bookings_to_remind:
+            booking_id, username, class_name, target_time_str, day_of_week, instructor, last_booked_date, notification_sent = booking
+
+            # Calculate the next occurrence date for the recurring booking
+            days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
+            target_day_index = days_of_week_map[day_of_week]
+            
+            days_until_target = (target_day_index - now.weekday() + 7) % 7
+            next_occurrence_date = now + timedelta(days=days_until_target)
+            current_target_date_str = next_occurrence_date.strftime("%Y-%m-%d")
+
+            target_datetime = datetime.strptime(f"{current_target_date_str} {target_time_str}", "%Y-%m-%d %H:%M")
+
+            # Check if the booking is within the cancellation reminder window (e.g., 24-48 hours before)
+            # And if it's for today or tomorrow
+            time_until_class = target_datetime - now
+            
+            # Define the reminder window: between 24 and 48 hours before the class
+            if timedelta(hours=24) <= time_until_class <= timedelta(hours=48):
+                logging.info(f"Sending cancellation reminder for booking ID {booking_id} for user {username}.")
+                subscriptions = database.get_push_subscriptions_for_user(username)
+                
+                if subscriptions:
+                    for sub in subscriptions:
+                        try:
+                            webpush(
+                                subscription_info=sub,
+                                data=json.dumps({
+                                    "title": "Reminder: Cancel Your Class!",
+                                    "body": f"Don't forget to cancel your {class_name} class on {current_target_date_str} at {target_time_str} if you can't make it!",
+                                    "icon": "/favicon.png",
+                                    "badge": "/favicon.png",
+                                    "tag": f"cancellation-reminder-{booking_id}",
+                                    "url": "/my-bookings"
+                                }),
+                                vapid_private_key=config.VAPID_PRIVATE_KEY,
+                                vapid_claims={"sub": config.VAPID_ADMIN_EMAIL}
+                            )
+                            logging.info(f"Cancellation reminder sent to {username} for booking ID {booking_id}.")
+                            database.update_auto_booking_status(booking_id, notification_sent=1)
+                        except Exception as e:
+                            logging.error(f"Error sending cancellation reminder to {username} for booking ID {booking_id}: {e}")
+                            if "410" in str(e): # GONE status, subscription is no longer valid
+                                database.delete_push_subscription(sub['endpoint'])
+                                logging.info(f"Deleted invalid push subscription for user {username}: {sub['endpoint']}")
+                else:
+                    logging.info(f"No push subscriptions found for user {username} for booking ID {booking_id}.")
+            else:
+                logging.debug(f"Booking ID {booking_id} for {username} not within cancellation reminder window. Time until class: {time_until_class}")
+
+def reset_failed_bookings():
+    with app.app_context():
+        logging.info("Running reset_failed_bookings job.")
+        failed_bookings = database.get_failed_auto_bookings()
+        now_timestamp = int(datetime.now().timestamp())
+        reset_threshold_seconds = 24 * 60 * 60  # 24 hours
+
+        for booking_id, last_attempt_at in failed_bookings:
+            if last_attempt_at and (now_timestamp - last_attempt_at) > reset_threshold_seconds:
+                logging.info(f"Resetting failed auto-booking ID {booking_id} to pending.")
+                database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=None, retry_count=0)
+            else:
+                logging.debug(f"Failed auto-booking ID {booking_id} not yet eligible for reset.")
+
 # ... (rest of the scheduler functions remain the same for now)
 
 app.config["JWT_SECRET_KEY"] = config.JWT_SECRET_KEY
