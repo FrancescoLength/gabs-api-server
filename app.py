@@ -200,7 +200,7 @@ def send_cancellation_reminders():
                                     "url": "/my-bookings"
                                 }),
                                 vapid_private_key=config.VAPID_PRIVATE_KEY,
-                                vapid_claims={"sub": config.VAPID_ADMIN_EMAIL}
+                                vapid_claims={"sub": f"mailto:{config.VAPID_ADMIN_EMAIL}"}
                             )
                             logging.info(f"Cancellation reminder sent to {username} for booking ID {booking_id}.")
                             database.update_auto_booking_status(booking_id, notification_sent=1)
