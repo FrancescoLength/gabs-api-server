@@ -345,7 +345,29 @@ def get_my_bookings(user_scraper):
     bookings = user_scraper.get_my_bookings()
     
     for booking in bookings:
-        class_name = booking.get(\'name\')\n        class_date_raw = booking.get(\'date\')\n        class_time = booking.get(\'time\')\n        instructor = booking.get(\'instructor\')\n\n        if class_name and class_date_raw and class_time:\n            # Parse the date from the scraper (e.g., 'Tuesday 21st October') to 'YYYY-MM-DD'\n            try:\n                # Example: 'Tuesday 21st October' -> '21 October'\n                date_part = ' '.join(class_date_raw.split(' ')[1:]) \n                # Remove 'st', 'nd', 'rd', 'th' from day\n                date_part = re.sub(r'(\d+)(st|nd|rd|th)', r'\\1', date_part)\n                # Add current year for parsing\n                current_year = datetime.now().year\n                parsed_date = datetime.strptime(f\"{date_part} {current_year}\", \"%d %B %Y\")\n                class_date = parsed_date.strftime(\"%Y-%m-%d\")\n            except Exception as e:\n                logging.error(f\"Error parsing date '{class_date_raw}': {e}\")\n                continue # Skip this booking if date parsing fails\n\n            if not database.live_booking_exists(current_user, class_name, class_date, class_time):\n                database.add_live_booking(current_user, class_name, class_date, class_time, instructor)\n                logging.info(f\"Added live booking for {current_user}: {class_name} on {class_date} at {class_time} to database.\")
+        class_name = booking.get('name')
+        class_date_raw = booking.get('date')
+        class_time = booking.get('time')
+        instructor = booking.get('instructor')
+
+        if class_name and class_date_raw and class_time:
+            # Parse the date from the scraper (e.g., 'Tuesday 21st October') to 'YYYY-MM-DD'
+            try:
+                # Example: 'Tuesday 21st October' -> '21 October'
+                date_part = ' '.join(class_date_raw.split(' ')[1:]) 
+                # Remove 'st', 'nd', 'rd', 'th' from day
+                date_part = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_part)
+                # Add current year for parsing
+                current_year = datetime.now().year
+                parsed_date = datetime.strptime(f"{date_part} {current_year}", "%d %B %Y")
+                class_date = parsed_date.strftime("%Y-%m-%d")
+            except Exception as e:
+                logging.error(f"Error parsing date '{class_date_raw}': {e}")
+                continue # Skip this booking if date parsing fails
+
+            if not database.live_booking_exists(current_user, class_name, class_date, class_time):
+                database.add_live_booking(current_user, class_name, class_date, class_time, instructor)
+                logging.info(f"Added live booking for {current_user}: {class_name} on {class_date} at {class_time} to database.")
 
     return jsonify(bookings)
 
