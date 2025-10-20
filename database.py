@@ -228,6 +228,29 @@ def delete_session(username):
     conn.close()
     return cursor.rowcount > 0
 
+def get_all_users():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT username FROM auto_bookings")
+    users = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return users
+
+def get_all_sessions():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, encrypted_password, session_data, updated_at FROM sessions")
+    sessions = []
+    for row in cursor.fetchall():
+        sessions.append({
+            "username": row[0],
+            "encrypted_password": row[1],
+            "session_data": json.loads(row[2]) if row[2] else None,
+            "updated_at": row[3]
+        })
+    conn.close()
+    return sessions
+
 if __name__ == '__main__':
     init_db()
     print("Database initialized and tables created/updated.")
