@@ -22,7 +22,22 @@ def init_db():
             day_of_week TEXT NOT NULL, -- e.g., 'Monday', 'Tuesday'
             instructor TEXT NOT NULL, -- Instructor name
             last_booked_date TEXT, -- YYYY-MM-DD, last date a recurring booking was made for
-            notification_sent INTEGER DEFAULT 0 -- 0 for not sent, 1 for sent
+            notification_sent INTEGER DEFAULT 0 -- 0 for not sent, 1 for sent (for auto-booking reminders)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS live_bookings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            class_name TEXT NOT NULL,
+            class_date TEXT NOT NULL, -- YYYY-MM-DD
+            class_time TEXT NOT NULL, -- HH:MM
+            instructor TEXT,
+            reminder_sent INTEGER DEFAULT 0, -- 0 for not sent, 1 for sent
+            created_at INTEGER NOT NULL, -- Unix timestamp
+            auto_booking_id INTEGER, -- Optional: Link to auto_bookings if originated from there
+            FOREIGN KEY (auto_booking_id) REFERENCES auto_bookings(id)
         )
     ''')
 
@@ -188,6 +203,42 @@ def get_all_auto_bookings():
     bookings = cursor.fetchall()
     conn.close()
     return bookings
+
+def add_live_booking(username, class_name, class_date, class_time, instructor=None, auto_booking_id=None):
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    created_at = int(datetime.now().timestamp())
+    cursor.execute("INSERT INTO live_bookings (username, class_name, class_date, class_time, instructor, reminder_sent, created_at, auto_booking_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                   (username, class_name, class_date, class_time, instructor, 0, created_at, auto_booking_id))
+    conn.commit()
+    booking_id = cursor.lastrowid
+    conn.close()
+    return booking_id
+
+def get_live_bookings_for_reminder():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    # Select live bookings for which a reminder has not been sent yet
+    cursor.execute("SELECT id, username, class_name, class_date, class_time, instructor FROM live_bookings WHERE reminder_sent = 0")
+    bookings = cursor.fetchall()
+    conn.close()
+    return bookings
+
+def update_live_booking_reminder_status(booking_id, reminder_sent=1):
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE live_bookings SET reminder_sent = ? WHERE id = ?", (reminder_sent, booking_id))
+    conn.commit()
+    conn.close()
+
+def live_booking_exists(username, class_name, class_date, class_time):
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM live_bookings WHERE username = ? AND class_name = ? AND class_date = ? AND class_time = ?",
+                   (username, class_name, class_date, class_time))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count > 0
 
 def get_failed_auto_bookings():
     conn = sqlite3.connect(DATABASE_FILE)

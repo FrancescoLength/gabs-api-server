@@ -137,6 +137,7 @@ def process_auto_bookings():
                 result_message = result.get('message', '').lower()
                 if result.get('status') == 'success' or (result.get('status') == 'info' and ("already registered" in result_message or "waiting list" in result_message or "already booked" in result_message)):
                     database.update_auto_booking_status(booking_id, 'pending', last_booked_date=current_target_date, last_attempt_at=int(datetime.now().timestamp()))
+                    database.add_live_booking(username, class_name, current_target_date, target_time, instructor, booking_id)
                     logging.info(f"Successfully processed booking for auto-booking {booking_id}. Status: {result.get('message')}")
                 else:
                     new_retry_count = retry_count + 1
@@ -161,29 +162,23 @@ def process_auto_bookings():
 def send_cancellation_reminders():
     with app.app_context():
         logging.info("Running send_cancellation_reminders job.")
-        bookings_to_remind = database.get_upcoming_bookings_for_notification()
+        live_bookings_to_remind = database.get_live_bookings_for_reminder()
         now = datetime.now()
 
-        for booking in bookings_to_remind:
-            booking_id, username, class_name, target_time_str, day_of_week, instructor, last_booked_date, notification_sent = booking
+        for booking in live_bookings_to_remind:
+            booking_id, username, class_name, class_date_str, class_time_str, instructor = booking
 
-            # Calculate the next occurrence date for the recurring booking
-            days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
-            target_day_index = days_of_week_map[day_of_week]
+            class_datetime = datetime.strptime(f"{class_date_str} {class_time_str}", "%Y-%m-%d %H:%M")
+
+            time_until_class = class_datetime - now
             
-            days_until_target = (target_day_index - now.weekday() + 7) % 7
-            next_occurrence_date = now + timedelta(days=days_until_target)
-            current_target_date_str = next_occurrence_date.strftime("%Y-%m-%d")
-
-            target_datetime = datetime.strptime(f"{current_target_date_str} {target_time_str}", "%Y-%m-%d %H:%M")
-
-            # Check if the booking is within the cancellation reminder window (e.g., 24-48 hours before)
-            # And if it's for today or tomorrow
-            time_until_class = target_datetime - now
+            # Define the reminder window: exactly 3 hours and 30 minutes before the class
+            reminder_threshold = timedelta(hours=3, minutes=30)
             
-            # Define the reminder window: between 24 and 48 hours before the class
-            if timedelta(hours=24) <= time_until_class <= timedelta(hours=48):
-                logging.info(f"Sending cancellation reminder for booking ID {booking_id} for user {username}.")
+            # Check if current time is within a small window around the reminder_threshold
+            # To avoid missing the exact second, we check a small interval, e.g., +/- 1 minute
+            if timedelta(hours=3, minutes=29) <= time_until_class <= timedelta(hours=3, minutes=31):
+                logging.info(f"Sending cancellation reminder for live booking ID {booking_id} for user {username}.")
                 subscriptions = database.get_push_subscriptions_for_user(username)
                 
                 if subscriptions:
@@ -193,7 +188,7 @@ def send_cancellation_reminders():
                                 subscription_info=sub,
                                 data=json.dumps({
                                     "title": "Reminder: Cancel Your Class!",
-                                    "body": f"Don't forget to cancel your {class_name} class on {current_target_date_str} at {target_time_str} if you can't make it!",
+                                    "body": f"Don't forget to cancel your {class_name} class on {class_date_str} at {class_time_str} if you can't make it!",
                                     "icon": "/favicon.png",
                                     "badge": "/favicon.png",
                                     "tag": f"cancellation-reminder-{booking_id}",
@@ -202,17 +197,17 @@ def send_cancellation_reminders():
                                 vapid_private_key=config.VAPID_PRIVATE_KEY,
                                 vapid_claims={"sub": f"mailto:{config.VAPID_ADMIN_EMAIL}"}
                             )
-                            logging.info(f"Cancellation reminder sent to {username} for booking ID {booking_id}.")
-                            database.update_auto_booking_status(booking_id, notification_sent=1)
+                            logging.info(f"Cancellation reminder sent to {username} for live booking ID {booking_id}.")
+                            database.update_live_booking_reminder_status(booking_id, reminder_sent=1)
                         except Exception as e:
-                            logging.error(f"Error sending cancellation reminder to {username} for booking ID {booking_id}: {e}")
+                            logging.error(f"Error sending cancellation reminder to {username} for live booking ID {booking_id}: {e}")
                             if "410" in str(e): # GONE status, subscription is no longer valid
                                 database.delete_push_subscription(sub['endpoint'])
                                 logging.info(f"Deleted invalid push subscription for user {username}: {sub['endpoint']}")
                 else:
-                    logging.info(f"No push subscriptions found for user {username} for booking ID {booking_id}.")
+                    logging.info(f"No push subscriptions found for user {username} for live booking ID {booking_id}.")
             else:
-                logging.debug(f"Booking ID {booking_id} for {username} not within cancellation reminder window. Time until class: {time_until_class}")
+                logging.debug(f"Live booking ID {booking_id} for {username} not within cancellation reminder window. Time until class: {time_until_class}")
 
 def reset_failed_bookings():
     with app.app_context():
@@ -346,7 +341,20 @@ def cancel_booking(user_scraper):
 @app.route('/api/bookings', methods=['GET'])
 @scraper_endpoint
 def get_my_bookings(user_scraper):
+    current_user = get_jwt_identity()
     bookings = user_scraper.get_my_bookings()
+    
+    for booking in bookings:
+        class_name = booking.get('name')
+        class_date = booking.get('date')
+        class_time = booking.get('time')
+        instructor = booking.get('instructor')
+
+        if class_name and class_date and class_time:
+            if not database.live_booking_exists(current_user, class_name, class_date, class_time):
+                database.add_live_booking(current_user, class_name, class_date, class_time, instructor)
+                logging.info(f"Added live booking for {current_user}: {class_name} on {class_date} at {class_time} to database.")
+
     return jsonify(bookings)
 
 @app.route('/api/availability', methods=['GET'])
