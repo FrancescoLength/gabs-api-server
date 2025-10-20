@@ -446,7 +446,7 @@ class Scraper:
                 
                 full_text = item.get_text(strip=True)
                 
-                match = re.search(r'(.*)\\s*-\s*(.*?)\\s*(\d{2}:\d{2})', full_text)
+                match = re.search(r'(.*)\s*-\s*(.*?)\s*(\d{2}:\d{2})', full_text)
                 if match:
                     class_name = match.group(1).strip()
                     class_date = match.group(2).strip()
