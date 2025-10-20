@@ -1,6 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime
+import json
 
 DATABASE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'auto_bookings.db')
 
@@ -25,8 +26,6 @@ def init_db():
         )
     ''')
 
-    conn.commit()
-    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS push_subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,6 +34,15 @@ def init_db():
             p256dh TEXT NOT NULL,
             auth TEXT NOT NULL,
             created_at INTEGER NOT NULL
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sessions (
+            username TEXT PRIMARY KEY,
+            encrypted_password TEXT NOT NULL,
+            session_data TEXT,
+            updated_at INTEGER NOT NULL
         )
     ''')
 
@@ -189,6 +197,37 @@ def get_failed_auto_bookings():
     conn.close()
     return bookings
 
+def save_session(username, encrypted_password, session_data):
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    updated_at = int(datetime.now().timestamp())
+    session_data_json = json.dumps(session_data)
+    
+    cursor.execute("INSERT OR REPLACE INTO sessions (username, encrypted_password, session_data, updated_at) VALUES (?, ?, ?, ?)",
+                   (username, encrypted_password, session_data_json, updated_at))
+    conn.commit()
+    conn.close()
+
+def load_session(username):
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT encrypted_password, session_data FROM sessions WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        encrypted_password, session_data_json = row
+        session_data = json.loads(session_data_json) if session_data_json else None
+        return encrypted_password, session_data
+    return None, None
+
+def delete_session(username):
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM sessions WHERE username = ?", (username,))
+    conn.commit()
+    conn.close()
+    return cursor.rowcount > 0
+
 if __name__ == '__main__':
     init_db()
-    print("Database initialized and table 'auto_bookings' updated.")
+    print("Database initialized and tables created/updated.")

@@ -12,6 +12,9 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
 VAPID_ADMIN_EMAIL = os.getenv("VAPID_ADMIN_EMAIL")
 
+# Chiave per la crittografia dei dati sensibili (es. password salvate)
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+
 # Email dell'amministratore
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
