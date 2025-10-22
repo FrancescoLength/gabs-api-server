@@ -14,6 +14,16 @@ This Flask-based API server empowers users to seamlessly interact with a famous 
 -   **Intelligent Push Notifications:** Receive timely push notifications, including crucial cancellation reminders.
 -   **Admin Panel:** Dedicated endpoints for administrators to monitor logs, auto-bookings, push subscriptions, and server status.
 
+## Credential Management and Security
+
+The GABS API Server prioritizes the security of user credentials. The system employs robust measures to handle sensitive information:
+
+*   **Encrypted Storage:** User passwords are never stored in plaintext. Instead, they are securely encrypted using a strong symmetric encryption scheme (Fernet from the `cryptography` library) and persisted in the SQLite database. The encryption key (`ENCRYPTION_KEY`) is loaded from environment variables, ensuring it is not hardcoded within the codebase.
+*   **Secure Session Management:** Upon successful authentication, encrypted credentials are utilized to establish and maintain a secure, temporary session with the gym's website. This session-specific data is also stored in an encrypted format.
+*   **Strict Access Control:** Encrypted user passwords can only be accessed and decrypted by the automated booking system when strictly necessary to perform booking or scraping operations on behalf of the user.
+*   **Environment Variable Best Practices:** All sensitive keys, including the `JWT_SECRET_KEY`, VAPID keys for push notifications, and the `ENCRYPTION_KEY`, are managed through environment variables (typically loaded from a `.env` file). This practice prevents sensitive data from being exposed in version control or directly within the application's source code.
+*   **Data Purge on Logout:** Upon user logout, the encrypted password and associated session data are immediately and permanently removed from the database.
+
 ## Architecture Overview
 
 The application is designed with a decoupled architecture to ensure stability and performance, especially for time-sensitive tasks.
