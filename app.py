@@ -300,8 +300,7 @@ def scraper_endpoint(f):
 
 @app.route('/api/classes', methods=['GET'])
 @scraper_endpoint
-def get_available_classes(user_scraper):
-    classes = user_scraper.get_classes(days_in_advance=7)
+    classes = user_scraper.get_classes(days_in_advance=3)
     return jsonify(classes)
 
 @app.route('/api/book', methods=['POST'])
