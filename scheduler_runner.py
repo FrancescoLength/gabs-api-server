@@ -33,10 +33,10 @@ if __name__ == '__main__':
 
     # Add jobs to the scheduler
     # The main booking job, runs at the start of every minute.
-    scheduler.add_job(process_auto_bookings, 'interval', minutes=1, second='0', id='auto_booking_processor', replace_existing=True)
+    scheduler.add_job(process_auto_bookings, 'interval', minutes=1, seconds=0, id='auto_booking_processor', replace_existing=True)
     
     # The cancellation reminder job, runs at 30 seconds past the minute to avoid conflict.
-    scheduler.add_job(send_cancellation_reminders, 'interval', minutes=1, second='30', id='cancellation_reminder_sender', replace_existing=True)
+    scheduler.add_job(send_cancellation_reminders, 'interval', minutes=1, seconds=30, id='cancellation_reminder_sender', replace_existing=True)
     
     scheduler.add_job(reset_failed_bookings, 'interval', hours=24, id='reset_failed_bookings_job', replace_existing=True)
     
