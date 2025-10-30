@@ -181,14 +181,10 @@ class Scraper:
             logging.error(f"An unexpected error occurred during booking process: {e}")
             return {"error": f"An unexpected error occurred: {e}"}
 
-    def _get_classes_for_single_date(self, target_date_str, is_retry=False):
-        """Helper method to fetch class HTML for a single date with auto re-login."""
+    def _get_classes_for_single_date(self, target_date_str):
+        """Helper method to fetch class HTML for a single date with intelligent retry logic."""
         if self.disabled_until and datetime.now() < self.disabled_until:
             raise Exception(f"Scraper for {self.username} is temporarily disabled.")
-
-        self.csrf_token = self._get_csrf_token() # Refresh CSRF token
-        if not self.csrf_token:
-            raise Exception("Could not get a fresh CSRF token.")
 
         payload = {'date': target_date_str}
         headers = {
@@ -197,37 +193,49 @@ class Scraper:
             'X-Winter-Request-Partials': '@events',
             'x-csrf-token': self.csrf_token,
         }
+        
         try:
+            # First attempt
             response = self.session.post(BOOKING_URL, data=payload, headers=headers)
             response.raise_for_status()
             json_response = response.json()
 
             if json_response.get("X_OCTOBER_REDIRECT"):
-                logging.warning(f"Redirect received for {target_date_str}, session may have expired.")
-                if is_retry:
-                    raise SessionExpiredError("Session expired even after re-login.")
+                logging.warning(f"Redirect received for {target_date_str}. Refreshing CSRF token and retrying.")
                 
-                logging.info("Attempting to re-login to refresh session...")
-                if self._login():
-                    return self._get_classes_for_single_date(target_date_str, is_retry=True)
-                else:
-                    raise SessionExpiredError("Automatic re-login failed.")
+                # Refresh CSRF token and update headers
+                self.csrf_token = self._get_csrf_token()
+                if not self.csrf_token:
+                    raise SessionExpiredError("Failed to get a fresh CSRF token on first retry.")
+                headers['x-csrf-token'] = self.csrf_token
+
+                # Second attempt (with fresh CSRF token)
+                response = self.session.post(BOOKING_URL, data=payload, headers=headers)
+                response.raise_for_status()
+                json_response = response.json()
+
+                if json_response.get("X_OCTOBER_REDIRECT"):
+                    logging.warning(f"Redirect received again for {target_date_str} after CSRF refresh. Assuming session expired, attempting full re-login.")
+                    if self._login():
+                        # After re-login, the new CSRF token is already set in self.csrf_token
+                        headers['x-csrf-token'] = self.csrf_token
+                        
+                        # Third and final attempt (with new session)
+                        response = self.session.post(BOOKING_URL, data=payload, headers=headers)
+                        response.raise_for_status()
+                        json_response = response.json()
+
+                        if json_response.get("X_OCTOBER_REDIRECT"):
+                            raise SessionExpiredError("Still getting redirect after successful re-login.")
+                    else:
+                        raise SessionExpiredError("Automatic re-login failed.")
 
             return json_response.get('@events')
-        except requests.exceptions.RequestException as e:
-            if e.response and e.response.status_code == 403:
-                logging.warning(f"Forbidden (403) error for {target_date_str}. Session likely expired.")
-                if is_retry:
-                    raise SessionExpiredError("Session expired with 403 even after re-login.")
 
-                logging.info("Attempting to re-login to refresh session...")
-                if self._login():
-                    return self._get_classes_for_single_date(target_date_str, is_retry=True)
-                else:
-                    raise SessionExpiredError("Automatic re-login failed.")
-            else:
-                logging.error(f"Failed to get classes for {target_date_str}: {e}")
-                raise
+        except requests.exceptions.RequestException as e:
+            # This block can be simplified as the redirect is now handled above
+            logging.error(f"A request exception occurred while getting classes for {target_date_str}: {e}")
+            raise
         except Exception as e:
             logging.error(f"An unexpected error occurred in _get_classes_for_single_date for {target_date_str}: {e}")
             raise
@@ -369,43 +377,42 @@ class Scraper:
             
             logging.info(f"Attempting {action_description} for class ID {booking_payload['id']}...")
             try:
+                # First attempt
                 response = self.session.post(BOOKING_URL, data=booking_payload, headers=headers)
                 response.raise_for_status()
                 
-                if "X_OCTOBER_REDIRECT" not in response.text:
-                    logging.info(f"SUCCESS! The {action_description} appears to have been successful.")
-                    return {"status": "success", "action": action_description, "details": response.json()}
-                else:
-                    logging.warning(f"The {action_description} failed. Server responded with a redirect.")
-                    if is_retry:
-                        raise SessionExpiredError(f"Session expired during {action_description} even after re-login.")
+                if "X_OCTOBER_REDIRECT" in response.text:
+                    logging.warning(f"The {action_description} failed, possibly due to a stale CSRF token. Refreshing token and retrying.")
+                    
+                    # Refresh CSRF token and retry
+                    self.csrf_token = self._get_csrf_token()
+                    if not self.csrf_token:
+                        raise SessionExpiredError("Failed to get a fresh CSRF token for booking retry.")
+                    headers['x-csrf-token'] = self.csrf_token
 
-                    logging.info("Attempting to re-login to refresh session...")
-                    if self._login():
-                        fresh_classes_html = self._get_classes_for_single_date(target_date_str)
-                        if fresh_classes_html:
-                             return self._parse_and_execute_booking(fresh_classes_html, class_name, target_time, target_instructor, target_date_str, is_retry=True)
+                    response = self.session.post(BOOKING_URL, data=booking_payload, headers=headers)
+                    response.raise_for_status()
+
+                    if "X_OCTOBER_REDIRECT" in response.text:
+                        logging.warning(f"The {action_description} failed again after CSRF refresh. Assuming session expired, attempting full re-login.")
+                        if self._login():
+                            # We must re-fetch the classes to get the new form details (e.g., timestamp)
+                            fresh_classes_html = self._get_classes_for_single_date(target_date_str)
+                            if fresh_classes_html:
+                                # Recursive call to re-run the whole booking logic with the fresh HTML
+                                return self._parse_and_execute_booking(fresh_classes_html, class_name, target_time, target_instructor, target_date_str)
+                            else:
+                                raise SessionExpiredError("Could not retrieve fresh class list after re-login.")
                         else:
-                             raise SessionExpiredError("Could not retrieve fresh class list after re-login.")
-                    else:
-                        raise SessionExpiredError(f"Automatic re-login failed during {action_description}.")
+                            raise SessionExpiredError(f"Automatic re-login failed during {action_description}.")
+
+                # If we are here, it means one of the attempts was successful
+                logging.info(f"SUCCESS! The {action_description} appears to have been successful.")
+                return {"status": "success", "action": action_description, "details": response.json()}
+
             except requests.exceptions.RequestException as e:
-                if e.response and e.response.status_code == 403:
-                    logging.warning(f"Forbidden (403) during {action_description}. Session likely expired.")
-                    if is_retry:
-                        raise SessionExpiredError(f"Session expired with 403 during {action_description} even after re-login.")
-
-                    logging.info("Attempting to re-login to refresh session...")
-                    if self._login():
-                        fresh_classes_html = self._get_classes_for_single_date(target_date_str)
-                        if fresh_classes_html:
-                             return self._parse_and_execute_booking(fresh_classes_html, class_name, target_time, target_instructor, target_date_str, is_retry=True)
-                        else:
-                             raise SessionExpiredError("Could not retrieve fresh class list after re-login.")
-                    else:
-                        raise SessionExpiredError(f"Automatic re-login failed during {action_description}.")
-                else:
-                    raise
+                logging.error(f"A request exception occurred during {action_description}: {e}")
+                raise
         else:
             if target_time and class_name:
                  return {"status": "error", "message": f"Could not find a suitable match for '{class_name}' at {target_time}. Best match score was {highest_score}."}
@@ -500,41 +507,42 @@ class Scraper:
         
         logging.info(f"Attempting cancellation for class ID {cancellation_payload['id']}...")
         try:
+            # First attempt
             response = self.session.post(BOOKING_URL, data=cancellation_payload, headers=headers)
             response.raise_for_status()
-            
+
             if "X_OCTOBER_REDIRECT" in response.text:
-                logging.warning("Cancellation failed, possibly due to expired session. Retrying.")
-                if is_retry:
-                    raise SessionExpiredError("Session expired during cancellation even after re-login.")
+                logging.warning("Cancellation failed, possibly due to a stale CSRF token. Refreshing token and retrying.")
 
-                if self._login():
-                    fresh_html = self._get_classes_for_single_date(target_date_str)
-                    if fresh_html:
-                        return self._parse_and_execute_cancellation(fresh_html, class_name, target_time, instructor_name, target_date_str, is_retry=True)
+                # Refresh CSRF token and retry
+                self.csrf_token = self._get_csrf_token()
+                if not self.csrf_token:
+                    raise SessionExpiredError("Failed to get a fresh CSRF token for cancellation retry.")
+                headers['x-csrf-token'] = self.csrf_token
+
+                response = self.session.post(BOOKING_URL, data=cancellation_payload, headers=headers)
+                response.raise_for_status()
+
+                if "X_OCTOBER_REDIRECT" in response.text:
+                    logging.warning("Cancellation failed again after CSRF refresh. Assuming session expired, attempting full re-login.")
+                    if self._login():
+                        # We must re-fetch the classes to get the new form details
+                        fresh_html = self._get_classes_for_single_date(target_date_str)
+                        if fresh_html:
+                            # Recursive call to re-run the cancellation logic
+                            return self._parse_and_execute_cancellation(fresh_html, class_name, target_time, instructor_name, target_date_str)
+                        else:
+                            raise SessionExpiredError("Could not get fresh class list for cancellation retry.")
                     else:
-                        raise SessionExpiredError("Could not get fresh class list for cancellation retry.")
-                else:
-                    raise SessionExpiredError("Automatic re-login failed during cancellation.")
-            else:
-                logging.info("SUCCESS! The cancellation appears to have been successful.")
-                return {"status": "success", "action": "cancellation", "details": response.json()}
+                        raise SessionExpiredError("Automatic re-login failed during cancellation.")
+            
+            # If we are here, one of the attempts was successful
+            logging.info("SUCCESS! The cancellation appears to have been successful.")
+            return {"status": "success", "action": "cancellation", "details": response.json()}
+
         except requests.exceptions.RequestException as e:
-            if e.response and e.response.status_code == 403:
-                logging.warning("Forbidden (403) during cancellation. Session likely expired. Retrying.")
-                if is_retry:
-                    raise SessionExpiredError("Session expired with 403 during cancellation even after re-login.")
-
-                if self._login():
-                    fresh_html = self._get_classes_for_single_date(target_date_str)
-                    if fresh_html:
-                        return self._parse_and_execute_cancellation(fresh_html, class_name, target_time, instructor_name, target_date_str, is_retry=True)
-                    else:
-                        raise SessionExpiredError("Could not get fresh class list for cancellation retry.")
-                else:
-                    raise SessionExpiredError("Automatic re-login failed during cancellation.")
-            else:
-                raise
+            logging.error(f"A request exception occurred during cancellation: {e}")
+            raise
     def get_my_bookings(self, is_retry=False):
         """Scrapes the members area to get a list of current bookings and waiting list entries."""
         logging.info("Attempting to scrape members area for bookings...")
