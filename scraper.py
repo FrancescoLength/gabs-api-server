@@ -186,6 +186,10 @@ class Scraper:
         if self.disabled_until and datetime.now() < self.disabled_until:
             raise Exception(f"Scraper for {self.username} is temporarily disabled.")
 
+        self.csrf_token = self._get_csrf_token() # Refresh CSRF token
+        if not self.csrf_token:
+            raise Exception("Could not get a fresh CSRF token.")
+
         payload = {'date': target_date_str}
         headers = {
             **self.base_headers,
@@ -283,6 +287,10 @@ class Scraper:
 
     def _parse_and_execute_booking(self, classes_html, class_name, target_time, target_instructor, target_date_str, is_retry=False):
         """Helper method that finds and books a class."""
+        self.csrf_token = self._get_csrf_token() # Refresh CSRF token
+        if not self.csrf_token:
+            raise Exception("Could not get a fresh CSRF token for booking.")
+
         soup = BeautifulSoup(classes_html, 'html.parser')
         gym_classes = soup.find_all('div', {'class': 'class grid'})
         
@@ -423,6 +431,10 @@ class Scraper:
 
     def _parse_and_execute_cancellation(self, classes_html, class_name, target_time, instructor_name, target_date_str, is_retry=False):
         """Helper method that finds a class and triggers the cancellation, with auto re-login."""
+        self.csrf_token = self._get_csrf_token() # Refresh CSRF token
+        if not self.csrf_token:
+            raise Exception("Could not get a fresh CSRF token for cancellation.")
+
         soup = BeautifulSoup(classes_html, 'html.parser')
         gym_classes = soup.find_all('div', {'class': 'class grid'})
         
