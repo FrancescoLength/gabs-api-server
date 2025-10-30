@@ -5,6 +5,7 @@ import logging
 from datetime import date, timedelta, datetime
 import re
 from thefuzz import fuzz
+import random
 
 # --- Custom Exceptions ---
 class SessionExpiredError(Exception):
@@ -16,20 +17,28 @@ BASE_URL = config.WEBSITE_URL
 LOGIN_URL = BASE_URL + 'login'
 MEMBERS_URL = BASE_URL + 'members'
 BOOKING_URL = BASE_URL + 'book-classes'
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
-BASE_HEADERS = {
-    'User-Agent': USER_AGENT,
-    'Accept': 'application/json, text/javascript, */*; q=0.01',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Origin': BASE_URL.rstrip('/'),
-    'X-Requested-With': 'XMLHttpRequest',
-    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-    'Connection': 'keep-alive',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'same-origin',
-}
+
+USER_AGENTS = [
+    # Chrome on Windows (late 2025)
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+
+    # Chrome on macOS (late 2025)
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+
+    # Firefox on Windows (late 2025)
+    'Mozilla/5.0 (Windows NT 11.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0',
+    'Mozilla/5.0 (Windows NT 11.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0',
+
+    # Firefox on macOS (late 2025)
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:140.0) Gecko/20100101 Firefox/140.0',
+
+    # Safari on macOS (late 2025)
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15',
+]
 
 class Scraper:
     def __init__(self, username, password, session_data=None):
@@ -39,6 +48,20 @@ class Scraper:
         self.csrf_token = None
         self.relogin_failures = 0
         self.disabled_until = None
+        self.user_agent = random.choice(USER_AGENTS)
+        self.base_headers = {
+            'User-Agent': self.user_agent,
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Origin': BASE_URL.rstrip('/'),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+        }
 
         if session_data:
             self.from_dict(session_data)
@@ -62,7 +85,7 @@ class Scraper:
         """Fetch the CSRF token from the meta tag."""
         try:
             headers = {
-                'User-Agent': USER_AGENT,
+                'User-Agent': self.user_agent,
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
                 'Accept-Language': 'en-US,en;q=0.9',
                 'Accept-Encoding': 'gzip, deflate, br',
@@ -93,7 +116,7 @@ class Scraper:
                 'password': self.password,
             }
             headers = {
-                **BASE_HEADERS,
+                **self.base_headers,
                 'Referer': LOGIN_URL,
                 'X-Winter-Request-Handler': 'onSignin',
                 'x-csrf-token': self.csrf_token,
@@ -165,7 +188,7 @@ class Scraper:
 
         payload = {'date': target_date_str}
         headers = {
-            **BASE_HEADERS,
+            **self.base_headers,
             'X-Winter-Request-Handler': 'onDate',
             'X-Winter-Request-Partials': '@events',
             'x-csrf-token': self.csrf_token,
@@ -331,7 +354,7 @@ class Scraper:
                 'timestamp': timestamp_input.get('value'),
             }
             headers = {
-                **BASE_HEADERS,
+                **self.base_headers,
                 'X-Winter-Request-Handler': handler,
                 'x-csrf-token': self.csrf_token,
             }
@@ -458,7 +481,7 @@ class Scraper:
             'timestamp': timestamp_input.get('value'),
         }
         headers = {
-            **BASE_HEADERS,
+            **self.base_headers,
             'X-Winter-Request-Handler': handler,
             'x-csrf-token': self.csrf_token,
         }
@@ -504,7 +527,7 @@ class Scraper:
         """Scrapes the members area to get a list of current bookings and waiting list entries."""
         logging.info("Attempting to scrape members area for bookings...")
         try:
-            response = self.session.get(MEMBERS_URL, headers={'User-Agent': USER_AGENT})
+            response = self.session.get(MEMBERS_URL, headers={'User-Agent': self.user_agent})
             response.raise_for_status()
 
             # Check if we were redirected to the login page, indicating an expired session
