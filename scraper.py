@@ -189,6 +189,10 @@ class Scraper:
         if self.disabled_until and datetime.now() < self.disabled_until:
             raise Exception(f"Scraper for {self.username} is temporarily disabled.")
 
+        self.csrf_token = self._get_csrf_token()
+        if not self.csrf_token:
+            raise SessionExpiredError("Failed to get a fresh CSRF token before first attempt.")
+
         payload = {'date': target_date_str}
         headers = {
             **self.base_headers,
