@@ -42,6 +42,22 @@ USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.2478.67',
 ]
 
+from functools import wraps
+
+def handle_session_expiry(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except SessionExpiredError as e:
+            logging.warning(f"Session expired during {func.__name__}. Attempting re-login.")
+            if self._login():
+                logging.info("Re-login successful. Retrying original operation.")
+                return func(self, *args, **kwargs)
+            else:
+                raise SessionExpiredError(f"Automatic re-login failed during {func.__name__}.") from e
+    return wrapper
+
 class Scraper:
     def __init__(self, username, password, session_data=None):
         self.username = username
@@ -142,6 +158,7 @@ class Scraper:
                 logging.critical(f"Disabling scraper for {self.username} for 15 minutes due to {self.relogin_failures} consecutive login failures.")
             return False
 
+    @handle_session_expiry
     def get_classes(self, days_in_advance=7):
         """Fetch all available classes for the next N days."""
         all_classes = []
@@ -150,19 +167,13 @@ class Scraper:
             target_date_str = target_date.strftime("%Y-%m-%d")
             logging.info(f"Fetching classes for date: {target_date_str}...")
             
-            try:
-                classes_html = self._get_classes_for_single_date(target_date_str)
-                if classes_html:
-                    parsed_classes = self._parse_classes_from_html(classes_html, target_date)
-                    all_classes.extend(parsed_classes)
-            except SessionExpiredError as e:
-                logging.critical(f"Could not recover from session expiry for {self.username}. Aborting get_classes. Error: {e}")
-                break
-            except Exception as e:
-                logging.warning(f"Could not retrieve classes for {target_date_str}: {e}")
-                continue # Try the next day
+            classes_html = self._get_classes_for_single_date(target_date_str)
+            if classes_html:
+                parsed_classes = self._parse_classes_from_html(classes_html, target_date)
+                all_classes.extend(parsed_classes)
         return all_classes
 
+    @handle_session_expiry
     def find_and_book_class(self, target_date_str, class_name="", target_time="", instructor=""):
         """Finds and books a class. Can match by class name or by time/instructor."""
         if target_time and class_name:
@@ -170,22 +181,15 @@ class Scraper:
         else:
             logging.info(f"Attempting to book '{class_name}' on {target_date_str}")
         
-        try:
-            classes_html = self._get_classes_for_single_date(target_date_str)
-            if not classes_html:
-                return {"error": "Could not retrieve class list for the specified date."}
-            
-            return self._parse_and_execute_booking(classes_html, class_name, target_time, instructor, target_date_str)
+        classes_html = self._get_classes_for_single_date(target_date_str)
+        if not classes_html:
+            return {"error": "Could not retrieve class list for the specified date."}
+        
+        return self._parse_and_execute_booking(classes_html, class_name, target_time, instructor, target_date_str)
 
-        except SessionExpiredError as e:
-            logging.critical(f"Could not recover from session expiry during booking. Error: {e}")
-            return {"error": f"A critical error occurred: Could not recover from an expired session. The scraper might be disabled."}
-        except Exception as e:
-            logging.error(f"An unexpected error occurred during booking process: {e}")
-            return {"error": f"An unexpected error occurred: {e}"}
-
+    @handle_session_expiry
     def _get_classes_for_single_date(self, target_date_str):
-        """Helper method to fetch class HTML for a single date with intelligent retry logic."""
+        """Helper method to fetch class HTML for a single date."""
         if self.disabled_until and datetime.now() < self.disabled_until:
             raise Exception(f"Scraper for {self.username} is temporarily disabled.")
 
@@ -201,51 +205,14 @@ class Scraper:
             'x-csrf-token': self.csrf_token,
         }
         
-        try:
-            # First attempt
-            response = self.session.post(BOOKING_URL, data=payload, headers=headers)
-            response.raise_for_status()
-            json_response = response.json()
+        response = self.session.post(BOOKING_URL, data=payload, headers=headers)
+        response.raise_for_status()
+        json_response = response.json()
 
-            if json_response.get("X_OCTOBER_REDIRECT"):
-                logging.warning(f"Redirect received for {target_date_str}. Refreshing CSRF token and retrying.")
-                
-                # Refresh CSRF token and update headers
-                self.csrf_token = self._get_csrf_token()
-                if not self.csrf_token:
-                    raise SessionExpiredError("Failed to get a fresh CSRF token on first retry.")
-                headers['x-csrf-token'] = self.csrf_token
+        if json_response.get("X_OCTOBER_REDIRECT"):
+            raise SessionExpiredError("Redirect received, indicating session has expired.")
 
-                # Second attempt (with fresh CSRF token)
-                response = self.session.post(BOOKING_URL, data=payload, headers=headers)
-                response.raise_for_status()
-                json_response = response.json()
-
-                if json_response.get("X_OCTOBER_REDIRECT"):
-                    logging.warning(f"Redirect received again for {target_date_str} after CSRF refresh. Assuming session expired, attempting full re-login.")
-                    if self._login():
-                        # After re-login, the new CSRF token is already set in self.csrf_token
-                        headers['x-csrf-token'] = self.csrf_token
-                        
-                        # Third and final attempt (with new session)
-                        response = self.session.post(BOOKING_URL, data=payload, headers=headers)
-                        response.raise_for_status()
-                        json_response = response.json()
-
-                        if json_response.get("X_OCTOBER_REDIRECT"):
-                            raise SessionExpiredError("Still getting redirect after successful re-login.")
-                    else:
-                        raise SessionExpiredError("Automatic re-login failed.")
-
-            return json_response.get('@events')
-
-        except requests.exceptions.RequestException as e:
-            # This block can be simplified as the redirect is now handled above
-            logging.error(f"A request exception occurred while getting classes for {target_date_str}: {e}")
-            raise
-        except Exception as e:
-            logging.error(f"An unexpected error occurred in _get_classes_for_single_date for {target_date_str}: {e}")
-            raise
+        return json_response.get('@events')
 
     def _parse_classes_from_html(self, classes_html, target_date):
         """Helper method to parse class details from HTML."""
@@ -300,6 +267,7 @@ class Scraper:
             })
         return parsed_classes
 
+    @handle_session_expiry
     def _parse_and_execute_booking(self, classes_html, class_name, target_time, target_instructor, target_date_str, is_retry=False):
         """Helper method that finds and books a class."""
         self.csrf_token = self._get_csrf_token() # Refresh CSRF token
@@ -383,66 +351,31 @@ class Scraper:
             }
             
             logging.info(f"Attempting {action_description} for class ID {booking_payload['id']}...")
-            try:
-                # First attempt
-                response = self.session.post(BOOKING_URL, data=booking_payload, headers=headers)
-                response.raise_for_status()
-                
-                if "X_OCTOBER_REDIRECT" in response.text:
-                    logging.warning(f"The {action_description} failed, possibly due to a stale CSRF token. Refreshing token and retrying.")
-                    
-                    # Refresh CSRF token and retry
-                    self.csrf_token = self._get_csrf_token()
-                    if not self.csrf_token:
-                        raise SessionExpiredError("Failed to get a fresh CSRF token for booking retry.")
-                    headers['x-csrf-token'] = self.csrf_token
+            response = self.session.post(BOOKING_URL, data=booking_payload, headers=headers)
+            response.raise_for_status()
+            
+            if "X_OCTOBER_REDIRECT" in response.text:
+                raise SessionExpiredError(f"The {action_description} failed, possibly due to a stale session.")
 
-                    response = self.session.post(BOOKING_URL, data=booking_payload, headers=headers)
-                    response.raise_for_status()
-
-                    if "X_OCTOBER_REDIRECT" in response.text:
-                        logging.warning(f"The {action_description} failed again after CSRF refresh. Assuming session expired, attempting full re-login.")
-                        if self._login():
-                            # We must re-fetch the classes to get the new form details (e.g., timestamp)
-                            fresh_classes_html = self._get_classes_for_single_date(target_date_str)
-                            if fresh_classes_html:
-                                # Recursive call to re-run the whole booking logic with the fresh HTML
-                                return self._parse_and_execute_booking(fresh_classes_html, class_name, target_time, target_instructor, target_date_str)
-                            else:
-                                raise SessionExpiredError("Could not retrieve fresh class list after re-login.")
-                        else:
-                            raise SessionExpiredError(f"Automatic re-login failed during {action_description}.")
-
-                # If we are here, it means one of the attempts was successful
-                logging.info(f"SUCCESS! The {action_description} appears to have been successful.")
-                return {"status": "success", "action": action_description, "details": response.json()}
-
-            except requests.exceptions.RequestException as e:
-                logging.error(f"A request exception occurred during {action_description}: {e}")
-                raise
+            logging.info(f"SUCCESS! The {action_description} appears to have been successful.")
+            return {"status": "success", "action": action_description, "details": response.json()}
         else:
             if target_time and class_name:
                  return {"status": "error", "message": f"Could not find a suitable match for '{class_name}' at {target_time}. Best match score was {highest_score}."}
             else:
                  return {"status": "error", "message": f"Specified class '{class_name}' not found."}
 
+    @handle_session_expiry
     def find_and_cancel_booking(self, class_name, target_date_str, target_time, instructor_name=""):
         """Finds a specific class on a given date and cancels the booking."""
         logging.info(f"Attempting to cancel '{class_name}' at {target_time} on {target_date_str}")
-        try:
-            classes_html = self._get_classes_for_single_date(target_date_str)
-            if not classes_html:
-                return {"error": "Could not retrieve class list for the specified date."}
-            
-            return self._parse_and_execute_cancellation(classes_html, class_name, target_time, instructor_name, target_date_str)
+        classes_html = self._get_classes_for_single_date(target_date_str)
+        if not classes_html:
+            return {"error": "Could not retrieve class list for the specified date."}
+        
+        return self._parse_and_execute_cancellation(classes_html, class_name, target_time, instructor_name, target_date_str)
 
-        except SessionExpiredError as e:
-            logging.critical(f"Could not recover from session expiry during cancellation. Error: {e}")
-            return {"error": f"A critical error occurred: Could not recover from an expired session."}
-        except Exception as e:
-            logging.error(f"An unexpected error occurred during cancellation process: {e}")
-            return {"error": f"An unexpected error occurred: {e}"}
-
+    @handle_session_expiry
     def _parse_and_execute_cancellation(self, classes_html, class_name, target_time, instructor_name, target_date_str, is_retry=False):
         """Helper method that finds a class and triggers the cancellation, with auto re-login."""
         self.csrf_token = self._get_csrf_token() # Refresh CSRF token
@@ -513,71 +446,32 @@ class Scraper:
         }
         
         logging.info(f"Attempting cancellation for class ID {cancellation_payload['id']}...")
-        try:
-            # First attempt
-            response = self.session.post(BOOKING_URL, data=cancellation_payload, headers=headers)
-            response.raise_for_status()
+        response = self.session.post(BOOKING_URL, data=cancellation_payload, headers=headers)
+        response.raise_for_status()
 
-            if "X_OCTOBER_REDIRECT" in response.text:
-                logging.warning("Cancellation failed, possibly due to a stale CSRF token. Refreshing token and retrying.")
-
-                # Refresh CSRF token and retry
-                self.csrf_token = self._get_csrf_token()
-                if not self.csrf_token:
-                    raise SessionExpiredError("Failed to get a fresh CSRF token for cancellation retry.")
-                headers['x-csrf-token'] = self.csrf_token
-
-                response = self.session.post(BOOKING_URL, data=cancellation_payload, headers=headers)
-                response.raise_for_status()
-
-                if "X_OCTOBER_REDIRECT" in response.text:
-                    logging.warning("Cancellation failed again after CSRF refresh. Assuming session expired, attempting full re-login.")
-                    if self._login():
-                        # We must re-fetch the classes to get the new form details
-                        fresh_html = self._get_classes_for_single_date(target_date_str)
-                        if fresh_html:
-                            # Recursive call to re-run the cancellation logic
-                            return self._parse_and_execute_cancellation(fresh_html, class_name, target_time, instructor_name, target_date_str)
-                        else:
-                            raise SessionExpiredError("Could not get fresh class list for cancellation retry.")
-                    else:
-                        raise SessionExpiredError("Automatic re-login failed during cancellation.")
-            
-            # If we are here, one of the attempts was successful
-            logging.info("SUCCESS! The cancellation appears to have been successful.")
-            return {"status": "success", "action": "cancellation", "details": response.json()}
-
-        except requests.exceptions.RequestException as e:
-            logging.error(f"A request exception occurred during cancellation: {e}")
-            raise
-    def get_my_bookings(self, is_retry=False):
+        if "X_OCTOBER_REDIRECT" in response.text:
+            raise SessionExpiredError("Cancellation failed, possibly due to a stale session.")
+        
+        logging.info("SUCCESS! The cancellation appears to have been successful.")
+        return {"status": "success", "action": "cancellation", "details": response.json()}
+    @handle_session_expiry
+    def get_my_bookings(self):
         """Scrapes the members area to get a list of current bookings and waiting list entries."""
         logging.info("Attempting to scrape members area for bookings...")
-        try:
-            response = self.session.get(MEMBERS_URL, headers={'User-Agent': self.user_agent})
-            response.raise_for_status()
+        response = self.session.get(MEMBERS_URL, headers={'User-Agent': self.user_agent})
+        response.raise_for_status()
 
-            # Check if we were redirected to the login page, indicating an expired session
-            if LOGIN_URL in response.url:
-                logging.warning("Redirected to login page while fetching bookings. Session may have expired.")
-                if is_retry:
-                    raise SessionExpiredError("Session expired for get_my_bookings even after re-login.")
-                
-                logging.info("Attempting to re-login to refresh session...")
-                if self._login():
-                    return self.get_my_bookings(is_retry=True)
-                else:
-                    raise SessionExpiredError("Automatic re-login failed during get_my_bookings.")
+        # Check if we were redirected to the login page, indicating an expired session
+        if LOGIN_URL in response.url:
+            raise SessionExpiredError("Session expired, redirect to login page detected.")
 
-            soup = BeautifulSoup(response.text, 'html.parser')
-            my_bookings = []
-            
-            bookings_container = soup.find('div', {'id': 'upcoming_bookings'})
-            if not bookings_container:
-                # This could happen on a valid page if there are no bookings.
-                # A more robust check for session expiry is the URL check above.
-                logging.info("Could not find 'upcoming_bookings' container on members page. It might be empty.")
-                return []
+        soup = BeautifulSoup(response.text, 'html.parser')
+        my_bookings = []
+        
+        bookings_container = soup.find('div', {'id': 'upcoming_bookings'})
+        if not bookings_container:
+            logging.info("Could not find 'upcoming_bookings' container on members page. It might be empty.")
+            return []
 
             booking_items = bookings_container.find_all('li')
 
@@ -614,39 +508,33 @@ class Scraper:
             logging.error(f"An unexpected error occurred while scraping bookings: {e}")
             return {"error": f"An unexpected error occurred: {e}"}
 
+    @handle_session_expiry
     def get_class_availability(self, class_name, target_date_str):
         """Gets the availability for a specific class on a given date."""
         logging.info(f"Checking availability for '{class_name}' on {target_date_str}")
-        try:
-            classes_html = self._get_classes_for_single_date(target_date_str)
-            if not classes_html:
-                return {"error": "Could not retrieve class list for the specified date."}
+        classes_html = self._get_classes_for_single_date(target_date_str)
+        if not classes_html:
+            return {"error": "Could not retrieve class list for the specified date."}
 
-            soup = BeautifulSoup(classes_html, 'html.parser')
-            gym_classes = soup.find_all('div', {'class': 'class grid'})
+        soup = BeautifulSoup(classes_html, 'html.parser')
+        gym_classes = soup.find_all('div', {'class': 'class grid'})
 
-            for gym_class in gym_classes:
-                title_tag = gym_class.find('h2', {'class': 'title'})
-                title = title_tag.text.strip() if title_tag else ""
+        for gym_class in gym_classes:
+            title_tag = gym_class.find('h2', {'class': 'title'})
+            title = title_tag.text.strip() if title_tag else ""
 
-                if class_name.lower() in title.lower():
-                    logging.info(f"Found matching class: {title}")
-                    remaining_spaces_tag = gym_class.find('span', {'class': 'remaining'})
-                    
-                    if remaining_spaces_tag and remaining_spaces_tag.text.isdigit():
-                        spaces = int(remaining_spaces_tag.text)
-                        return {
-                            "class_name": title,
-                            "date": target_date_str,
-                            "remaining_spaces": spaces
-                        }
-                    else:
-                        return {"error": f"Could not parse remaining spaces for {title}."}
-            
-            return {"error": f"Class '{class_name}' not found on {target_date_str}."}
-
-        except SessionExpiredError:
-            raise
-        except Exception as e:
-            logging.error(f"An unexpected error occurred during availability check: {e}")
-            return {"error": f"An unexpected error occurred: {e}"}
+            if class_name.lower() in title.lower():
+                logging.info(f"Found matching class: {title}")
+                remaining_spaces_tag = gym_class.find('span', {'class': 'remaining'})
+                
+                if remaining_spaces_tag and remaining_spaces_tag.text.isdigit():
+                    spaces = int(remaining_spaces_tag.text)
+                    return {
+                        "class_name": title,
+                        "date": target_date_str,
+                        "remaining_spaces": spaces
+                    }
+                else:
+                    return {"error": f"Could not parse remaining spaces for {title}."}
+        
+        return {"error": f"Class '{class_name}' not found on {target_date_str}."}
