@@ -454,6 +454,7 @@ class Scraper:
         
         logging.info("SUCCESS! The cancellation appears to have been successful.")
         return {"status": "success", "action": "cancellation", "details": response.json()}
+
     @handle_session_expiry
     def get_my_bookings(self):
         """Scrapes the members area to get a list of current bookings and waiting list entries."""
@@ -473,40 +474,34 @@ class Scraper:
             logging.info("Could not find 'upcoming_bookings' container on members page. It might be empty.")
             return []
 
-            booking_items = bookings_container.find_all('li')
+        booking_items = bookings_container.find_all('li')
 
-            for item in booking_items:
-                status = "Booked"
-                waitlist_tag = item.find('strong')
-                if waitlist_tag and 'WAITINGLIST' in waitlist_tag.text:
-                    status = "Waiting List"
-                    waitlist_tag.decompose()
+        for item in booking_items:
+            status = "Booked"
+            waitlist_tag = item.find('strong')
+            if waitlist_tag and 'WAITINGLIST' in waitlist_tag.text:
+                status = "Waiting List"
+                waitlist_tag.decompose()
+            
+            full_text = item.get_text(strip=True)
+            
+            match = re.search(r'(.*)\s*-\s*(.*?)\s*(\d{2}:\d{2})', full_text)
+            if match:
+                class_name = match.group(1).strip()
+                class_date = match.group(2).strip()
+                class_time = match.group(3).strip()
                 
-                full_text = item.get_text(strip=True)
-                
-                match = re.search(r'(.*)\s*-\s*(.*?)\s*(\d{2}:\d{2})', full_text)
-                if match:
-                    class_name = match.group(1).strip()
-                    class_date = match.group(2).strip()
-                    class_time = match.group(3).strip()
-                    
-                    my_bookings.append({
-                        'name': class_name,
-                        'date': class_date,
-                        'time': class_time,
-                        'status': status
-                    })
-                else:
-                    logging.warning(f"Could not parse booking string: {full_text}")
+                my_bookings.append({
+                    'name': class_name,
+                    'date': class_date,
+                    'time': class_time,
+                    'status': status
+                })
+            else:
+                logging.warning(f"Could not parse booking string: {full_text}")
 
-            logging.info(f"Successfully parsed {len(my_bookings)} bookings.")
-            return my_bookings
-
-        except SessionExpiredError:
-            raise
-        except Exception as e:
-            logging.error(f"An unexpected error occurred while scraping bookings: {e}")
-            return {"error": f"An unexpected error occurred: {e}"}
+        logging.info(f"Successfully parsed {len(my_bookings)} bookings.")
+        return my_bookings
 
     @handle_session_expiry
     def get_class_availability(self, class_name, target_date_str):
