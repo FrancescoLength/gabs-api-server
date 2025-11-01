@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 DATABASE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'auto_bookings.db')
@@ -130,8 +130,25 @@ def add_auto_booking(username, class_name, target_time, day_of_week, instructor)
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     created_at = int(datetime.now().timestamp())
-    cursor.execute("INSERT INTO auto_bookings (username, class_name, target_time, status, created_at, day_of_week, instructor, notification_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                   (username, class_name, target_time, 'pending', created_at, day_of_week, instructor, 0))
+
+    # Calculate the next booking date
+    now = datetime.now()
+    days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
+    target_day_index = days_of_week_map[day_of_week]
+    
+    days_until_target = (target_day_index - now.weekday() + 7) % 7
+    next_occurrence_date = now + timedelta(days=days_until_target)
+
+    # If the calculated date is today, but the time has already passed, set it to next week
+    if next_occurrence_date.date() == now.date() and now.time() > datetime.strptime(target_time, '%H:%M').time():
+        next_occurrence_date += timedelta(weeks=1)
+
+    # The `last_booked_date` should be set to the date before the next booking date
+    # so the scheduler will pick it up.
+    last_booked_date = (next_occurrence_date - timedelta(days=1)).strftime('%Y-%m-%d')
+
+    cursor.execute("INSERT INTO auto_bookings (username, class_name, target_time, status, created_at, day_of_week, instructor, notification_sent, last_booked_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                   (username, class_name, target_time, 'pending', created_at, day_of_week, instructor, 0, last_booked_date))
     conn.commit()
     booking_id = cursor.lastrowid
     conn.close()
