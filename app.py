@@ -102,8 +102,44 @@ scheduler = BackgroundScheduler(jobstores=jobstores)
 def process_auto_bookings():
     with app.app_context():
         pending_bookings = database.get_pending_auto_bookings()
+        now = datetime.now()
+
+        # --- Pre-warming Logic ---
         for booking in pending_bookings:
-            booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent = booking
+            booking_id, username, _, target_time, _, _, _, _, day_of_week, _, _, _, pre_warmed_date = booking
+            
+            days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
+            target_day_index = days_of_week_map.get(day_of_week)
+
+            if target_day_index is None:
+                continue
+
+            days_until_target = (target_day_index - now.weekday() + 7) % 7
+            next_occurrence_date = now + timedelta(days=days_until_target)
+            current_target_date_str = next_occurrence_date.strftime('%Y-%m-%d')
+
+            # Skip if already pre-warmed for this booking cycle
+            if pre_warmed_date == current_target_date_str:
+                continue
+
+            try:
+                target_datetime = datetime.strptime(f"{current_target_date_str} {target_time}", "%Y-%m-%d %H:%M")
+                booking_window_opens_dt = target_datetime - timedelta(hours=48)
+                pre_warm_start_dt = booking_window_opens_dt - timedelta(minutes=2)
+
+                if pre_warm_start_dt <= now < booking_window_opens_dt:
+                    logging.info(f"Pre-warming session for user {username} for booking {booking_id} opening at {booking_window_opens_dt}.")
+                    get_scraper_instance(username) # This will refresh the session if needed
+                    # Mark as pre-warmed for this cycle
+                    database.update_auto_booking_status(booking_id, 'pending', pre_warmed_date=current_target_date_str)
+
+            except ValueError:
+                logging.warning(f"Could not parse time for pre-warming check for booking {booking_id}. Skipping.")
+                continue
+        
+        # --- Booking Logic ---
+        for booking in pending_bookings:
+            booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent, _ = booking
 
             today = datetime.now()
             days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
@@ -136,7 +172,8 @@ def process_auto_bookings():
                 
                 result_message = result.get('message', '').lower()
                 if result.get('status') == 'success' or (result.get('status') == 'info' and ("already registered" in result_message or "waiting list" in result_message or "already booked" in result_message)):
-                    database.update_auto_booking_status(booking_id, 'pending', last_booked_date=current_target_date, last_attempt_at=int(datetime.now().timestamp()))
+                    # Reset pre_warmed_date to None for the next cycle
+                    database.update_auto_booking_status(booking_id, 'pending', last_booked_date=current_target_date, last_attempt_at=int(datetime.now().timestamp()), pre_warmed_date=None)
                     database.add_live_booking(username, class_name, current_target_date, target_time, instructor, booking_id)
                     logging.info(f"Successfully processed booking for auto-booking {booking_id}. Status: {result.get('message')}")
                 else:

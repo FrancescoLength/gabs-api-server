@@ -22,9 +22,10 @@ def init_db():
             day_of_week TEXT NOT NULL, -- e.g., 'Monday', 'Tuesday'
             instructor TEXT NOT NULL, -- Instructor name
             last_booked_date TEXT, -- YYYY-MM-DD, last date a recurring booking was made for
-            notification_sent INTEGER DEFAULT 0 -- 0 for not sent, 1 for sent (for auto-booking reminders)
+            notification_sent INTEGER DEFAULT 0, -- 0 for not sent, 1 for sent (for auto-booking reminders)
+            pre_warmed_date TEXT
         )
-    ''')
+    '''))
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS live_bookings (
@@ -130,25 +131,8 @@ def add_auto_booking(username, class_name, target_time, day_of_week, instructor)
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     created_at = int(datetime.now().timestamp())
-
-    # Calculate the next booking date
-    now = datetime.now()
-    days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
-    target_day_index = days_of_week_map[day_of_week]
-    
-    days_until_target = (target_day_index - now.weekday() + 7) % 7
-    next_occurrence_date = now + timedelta(days=days_until_target)
-
-    # If the calculated date is today, but the time has already passed, set it to next week
-    if next_occurrence_date.date() == now.date() and now.time() > datetime.strptime(target_time, '%H:%M').time():
-        next_occurrence_date += timedelta(weeks=1)
-
-    # The `last_booked_date` should be set to the date before the next booking date
-    # so the scheduler will pick it up.
-    last_booked_date = (next_occurrence_date - timedelta(days=1)).strftime('%Y-%m-%d')
-
-    cursor.execute("INSERT INTO auto_bookings (username, class_name, target_time, status, created_at, day_of_week, instructor, notification_sent, last_booked_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                   (username, class_name, target_time, 'pending', created_at, day_of_week, instructor, 0, last_booked_date))
+    cursor.execute("INSERT INTO auto_bookings (username, class_name, target_time, status, created_at, day_of_week, instructor, notification_sent, pre_warmed_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                   (username, class_name, target_time, 'pending', created_at, day_of_week, instructor, 0, None))
     conn.commit()
     booking_id = cursor.lastrowid
     conn.close()
@@ -157,12 +141,12 @@ def add_auto_booking(username, class_name, target_time, day_of_week, instructor)
 def get_pending_auto_bookings():
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent FROM auto_bookings WHERE status = 'pending'")
+    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent, pre_warmed_date FROM auto_bookings WHERE status = 'pending'")
     bookings = cursor.fetchall()
     conn.close()
     return bookings
 
-def update_auto_booking_status(booking_id, status, last_booked_date=None, last_attempt_at=None, retry_count=None, notification_sent=None):
+def update_auto_booking_status(booking_id, status, last_booked_date=None, last_attempt_at=None, retry_count=None, notification_sent=None, pre_warmed_date=None):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     update_sql = "UPDATE auto_bookings SET status = ?"
@@ -179,6 +163,9 @@ def update_auto_booking_status(booking_id, status, last_booked_date=None, last_a
     if notification_sent is not None:
         update_sql += ", notification_sent = ?"
         params.append(notification_sent)
+    if pre_warmed_date is not None:
+        update_sql += ", pre_warmed_date = ?"
+        params.append(pre_warmed_date)
     params.append(booking_id)
     update_sql += " WHERE id = ?"
     cursor.execute(update_sql, params)
