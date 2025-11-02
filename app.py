@@ -139,7 +139,7 @@ def process_auto_bookings():
         
         # --- Booking Logic ---
         for booking in pending_bookings:
-            booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent, _ = booking
+            booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent, pre_warmed_date = booking
 
             today = datetime.now()
             days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}

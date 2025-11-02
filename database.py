@@ -25,7 +25,7 @@ def init_db():
             notification_sent INTEGER DEFAULT 0, -- 0 for not sent, 1 for sent (for auto-booking reminders)
             pre_warmed_date TEXT
         )
-    '''))
+    ''')
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS live_bookings (
@@ -175,7 +175,7 @@ def update_auto_booking_status(booking_id, status, last_booked_date=None, last_a
 def get_auto_bookings_for_user(username):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent FROM auto_bookings WHERE username = ?", (username,))
+    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent, pre_warmed_date FROM auto_bookings WHERE username = ?", (username,))
     bookings = cursor.fetchall()
     conn.close()
     return bookings
@@ -203,7 +203,7 @@ def cancel_auto_booking(booking_id, username):
 def get_all_auto_bookings():
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent FROM auto_bookings")
+    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent, pre_warmed_date FROM auto_bookings")
     bookings = cursor.fetchall()
     conn.close()
     return bookings
