@@ -26,7 +26,7 @@ if __name__ == '__main__':
     # This allows multiple booking jobs to run in parallel, 
     # preventing one user's attempt from blocking another's.
     executors = {
-        'default': ThreadPoolExecutor(3)
+        'default': ThreadPoolExecutor(1)
     }
 
     scheduler = BackgroundScheduler(jobstores=jobstores, executors=executors)
