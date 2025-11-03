@@ -146,6 +146,21 @@ def get_pending_auto_bookings():
     conn.close()
     return bookings
 
+def lock_auto_booking(booking_id):
+    """
+    Atomically sets a booking's status to 'in_progress' to prevent other threads from processing it.
+    Returns True if the lock was acquired, False otherwise.
+    """
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE auto_bookings SET status = 'in_progress' WHERE id = ? AND status = 'pending'", (booking_id,))
+    conn.commit()
+    # Use cursor.rowcount to check if a row was actually updated.
+    # This is the atomic part of the lock.
+    lock_acquired = cursor.rowcount > 0
+    conn.close()
+    return lock_acquired
+
 def update_auto_booking_status(booking_id, status, last_booked_date=None, last_attempt_at=None, retry_count=None, notification_sent=None, pre_warmed_date=None):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
@@ -179,6 +194,14 @@ def get_auto_bookings_for_user(username):
     bookings = cursor.fetchall()
     conn.close()
     return bookings
+
+def get_auto_booking_by_id(booking_id):
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent, pre_warmed_date FROM auto_bookings WHERE id = ?", (booking_id,))
+    booking = cursor.fetchone()
+    conn.close()
+    return booking
 
 def get_upcoming_bookings_for_notification():
     conn = sqlite3.connect(DATABASE_FILE)
