@@ -101,7 +101,6 @@ scheduler = BackgroundScheduler(jobstores=jobstores)
 
 def process_auto_bookings():
     with app.app_context():
-        logging.info("Scheduler job 'process_auto_bookings' - STARTING.")
         pending_bookings = database.get_pending_auto_bookings()
         now = datetime.now()
 
@@ -139,7 +138,6 @@ def process_auto_bookings():
                 continue
         
         # --- Booking Logic ---
-        logging.info(f"Scheduler job 'process_auto_bookings' - Found {len(pending_bookings)} pending bookings to process.")
         for booking_summary in pending_bookings:
             booking_id = booking_summary[0]
 
@@ -185,7 +183,6 @@ def process_auto_bookings():
                         database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(datetime.now().timestamp()))
                         continue
 
-                    logging.info(f"Scheduler job 'process_auto_bookings' - EXECUTING booking {booking_id} for user {username}.")
                     logging.info(f"Attempting to book class on {current_target_date} at {target_time} with {instructor} for user {username} (Booking ID: {booking_id})")
                     result = user_scraper.find_and_book_class(target_date_str=current_target_date, class_name=class_name, target_time=target_time, instructor=instructor)
                     
