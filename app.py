@@ -177,13 +177,38 @@ def process_auto_bookings():
                     database.add_live_booking(username, class_name, current_target_date, target_time, instructor, booking_id)
                     logging.info(f"Successfully processed booking for auto-booking {booking_id}. Status: {result.get('message')}")
                 else:
-                    new_retry_count = retry_count + 1
-                    if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:
-                        database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
-                        logging.warning(f"Booking attempt failed for auto-booking {booking_id}. Retrying (attempt {new_retry_count}). Result: {result}")
+                    # New logic for handling "Could not find a suitable match"
+                    if 'Could not find a suitable match' in result.get('message', ''):
+                        new_retry_count = retry_count + 1
+                        
+                        # Save debug HTML
+                        html_content = result.get('html_content')
+                        if html_content:
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            debug_filename = f"debug_booking_{booking_id}_{timestamp}.html"
+                            debug_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), debug_filename)
+                            try:
+                                with open(debug_filepath, 'w', encoding='utf-8') as f:
+                                    f.write(html_content)
+                                logging.info(f"Saved debug HTML for booking {booking_id} to {debug_filename}")
+                            except Exception as e:
+                                logging.error(f"Failed to save debug HTML for booking {booking_id}: {e}")
+
+                        if new_retry_count < 2: # Allow only one retry (total 2 attempts)
+                            database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
+                            logging.warning(f"Booking attempt failed for auto-booking {booking_id} (match not found). Retrying once. Result: {result.get('message')}")
+                        else:
+                            database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
+                            logging.error(f"Booking attempt failed for auto-booking {booking_id} after 2 attempts (match not found). Marking as failed. Result: {result.get('message')}")
                     else:
-                        database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
-                        logging.error(f"Booking attempt failed for auto-booking {booking_id} after {new_retry_count} retries. Marking as failed. Result: {result}")
+                        # Existing logic for other types of errors
+                        new_retry_count = retry_count + 1
+                        if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:
+                            database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
+                            logging.warning(f"Booking attempt failed for auto-booking {booking_id}. Retrying (attempt {new_retry_count}). Result: {result}")
+                        else:
+                            database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
+                            logging.error(f"Booking attempt failed for auto-booking {booking_id} after {new_retry_count} retries. Marking as failed. Result: {result}")
             except SessionExpiredError:
                 handle_session_expiration(username)
                 logging.warning(f"Session expired for {username} during auto-booking. Re-logged in, will retry on next cycle.")

@@ -361,7 +361,7 @@ class Scraper:
             return {"status": "success", "action": action_description, "details": response.json()}
         else:
             if target_time and class_name:
-                 return {"status": "error", "message": f"Could not find a suitable match for '{class_name}' at {target_time}. Best match score was {highest_score}."}
+                 return {"status": "error", "message": f"Could not find a suitable match for '{class_name}' at {target_time}. Best match score was {highest_score}.", "html_content": classes_html}
             else:
                  return {"status": "error", "message": f"Specified class '{class_name}' not found."}
 
