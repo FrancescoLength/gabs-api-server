@@ -259,7 +259,7 @@ def send_cancellation_reminders():
             
             # Check if current time is within a small window around the reminder_threshold
             # To avoid missing the exact second, we check a small interval, e.g., +/- 1 minute
-            if timedelta(hours=3, minutes=29) <= time_until_class <= timedelta(hours=3, minutes=31):
+            if timedelta(hours=3, minutes=25) <= time_until_class <= timedelta(hours=3, minutes=35):
                 logging.info(f"Sending cancellation reminder for live booking ID {booking_id} for user {username}.")
                 subscriptions = database.get_push_subscriptions_for_user(username)
                 
