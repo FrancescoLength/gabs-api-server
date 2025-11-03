@@ -85,28 +85,75 @@ For local development, you need to run two separate processes in two different t
     python app.py
     ```
 
-### Production Deployment
+### Production Deployment (systemd)
 
-In a production environment (like a Raspberry Pi), the application **must** be run as two separate, long-running processes. Using a tool like `screen` or `systemd` is highly recommended.
+For a robust production deployment on a Linux system (like a Raspberry Pi), it is highly recommended to manage the Gunicorn web server and the scheduler as `systemd` services. This ensures they start automatically on boot and are restarted if they crash.
 
-1.  **Process 1: The Scheduler**
-    This process handles all time-critical background jobs.
-    ```bash
-    # Activate the environment
-    source venv/bin/activate
-    # Run the scheduler
-    python3 scheduler_runner.py
-    ```
+**1. Create the Service Files:**
 
-2.  **Process 2: The Web Server (Gunicorn)**
-    This process serves the API to the client application.
-    ```bash
-    # Activate the environment
-    source venv/bin/activate
-    # Run Gunicorn with 2-3 workers
-    gunicorn -w 2 -b 0.0.0.0:5000 app:app
-    ```
-    *(Note: A worker count of 2 or 3 is a safe starting point for a Raspberry Pi. Adjust as needed.)*
+You will need to create two service files in `/etc/systemd/system/`.
+
+**`gabs-api.service`** (for Gunicorn)
+```ini
+[Unit]
+Description=GABS API Gunicorn Service
+After=network.target
+
+[Service]
+User=gabs-admin
+Group=gabs-admin
+WorkingDirectory=/home/gabs-admin/gabs-api-server
+ExecStart=/home/gabs-admin/gabs-api-server/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:5000 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**`gabs-scheduler.service`** (for the Scheduler)
+```ini
+[Unit]
+Description=GABS Scheduler Service
+After=network.target
+
+[Service]
+User=gabs-admin
+Group=gabs-admin
+WorkingDirectory=/home/gabs-admin/gabs-api-server
+ExecStart=/home/gabs-admin/gabs-api-server/venv/bin/python3 scheduler_runner.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+*(Note: Ensure the `User`, `Group`, and paths in `WorkingDirectory` and `ExecStart` match your specific setup.)*
+
+**2. Enable and Start the Services:**
+
+After creating the files, run the following commands to enable and start the services:
+
+```bash
+# Reload the systemd daemon to recognize the new files
+sudo systemctl daemon-reload
+
+# Enable the services to start on boot
+sudo systemctl enable gabs-api.service
+sudo systemctl enable gabs-scheduler.service
+
+# Start the services immediately
+sudo systemctl start gabs-api.service
+sudo systemctl start gabs-scheduler.service
+```
+
+**3. Managing the Services:**
+
+You can now manage the application using standard `systemctl` commands:
+-   **Check Status:** `sudo systemctl status gabs-api` or `sudo systemctl status gabs-scheduler`
+-   **Stop:** `sudo systemctl stop gabs-api`
+-   **Start:** `sudo systemctl start gabs-api`
+-   **Restart:** `sudo systemctl restart gabs-api`
+-   **View Logs:** `sudo journalctl -u gabs-api` or `sudo journalctl -u gabs-scheduler -f` (to follow the logs)
+
 
 ## Testing
 
