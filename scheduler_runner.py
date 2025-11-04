@@ -6,7 +6,7 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 import time
 
 # Import the app object and job functions from the main application file.
-from app import app, process_auto_bookings, send_cancellation_reminders, reset_failed_bookings
+from app import app, process_auto_bookings, send_cancellation_reminders, reset_failed_bookings, refresh_sessions
 import database
 
 from logging_config import setup_logging
@@ -39,6 +39,9 @@ if __name__ == '__main__':
     scheduler.add_job(send_cancellation_reminders, 'interval', minutes=5, id='cancellation_reminder_sender', replace_existing=True, max_instances=1)
     
     scheduler.add_job(reset_failed_bookings, 'interval', hours=24, id='reset_failed_bookings_job', replace_existing=True)
+    
+    # Proactively refresh all user sessions every 30 minutes.
+    scheduler.add_job(refresh_sessions, 'interval', hours=2, id='session_refresher', replace_existing=True)
     
     scheduler.start()
     logger.info("Scheduler started and running.")

@@ -19,7 +19,7 @@ This Flask-based API server empowers users to seamlessly interact with a famous 
 The GABS API Server prioritizes the security of user credentials. The system employs robust measures to handle sensitive information:
 
 *   **Encrypted Storage:** User passwords are never stored in plaintext. Instead, they are securely encrypted using a strong symmetric encryption scheme (Fernet from the `cryptography` library) and persisted in the SQLite database. The encryption key (`ENCRYPTION_KEY`) is loaded from environment variables, ensuring it is not hardcoded within the codebase.
-*   **Secure Session Management:** Upon successful authentication, encrypted credentials are utilized to establish and maintain a secure, temporary session with the gym's website. This session-specific data is also stored in an encrypted format.
+*   **Secure Session Management:** Upon successful authentication, encrypted credentials are utilized to establish and maintain a secure session with the gym's website. Session-specific data (cookies, CSRF tokens) is securely stored in an encrypted format within the SQLite database. An in-memory cache is explicitly avoided to minimize RAM usage on resource-constrained devices. A proactive background job periodically refreshes these sessions to ensure they remain active, maximizing reliability for time-critical bookings.
 *   **Strict Access Control:** Encrypted user passwords can only be accessed and decrypted by the automated booking system when strictly necessary to perform booking or scraping operations on behalf of the user.
 *   **Environment Variable Best Practices:** All sensitive keys, including the `JWT_SECRET_KEY`, VAPID keys for push notifications, and the `ENCRYPTION_KEY`, are managed through environment variables (typically loaded from a `.env` file). This practice prevents sensitive data from being exposed in version control or directly within the application's source code.
 *   **Data Purge on Logout:** Upon user logout, the encrypted password and associated session data are immediately and permanently removed from the database.
@@ -32,6 +32,7 @@ The application is designed with a decoupled architecture to ensure stability an
 -   **`scheduler_runner.py`**: A standalone, dedicated process that runs the APScheduler for all background tasks. It uses a thread pool to execute jobs concurrently, which is critical for handling multiple auto-booking requests for the same class without delays.
 -   **`logging_config.py`**: A centralized module that provides a consistent logging format for both the web server and the scheduler processes.
 -   **`scraper.py`**: A robust web scraping client that handles all interactions with the gym's website, including advanced headers to mimic a real browser and prevent blocking.
+-   **Proactive Session Refresh:** A dedicated scheduler job (`refresh_sessions`) runs periodically (every 2 hours) to ensure all active user sessions with the gym's website remain valid. This minimizes the risk of session expiration during critical booking windows.
 
 ## Setup and Installation
 

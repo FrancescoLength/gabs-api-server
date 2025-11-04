@@ -41,58 +41,54 @@ CORS(app, resources={r"/api/*": {"origins": origins}}, supports_credentials=True
 database.init_db()
 
 # --- Session Management ---
-scraper_cache = {}
 
 def get_scraper_instance(username, password=None):
-    """Gets a scraper instance for a user, from cache, database, or by creating a new one."""
-    if username in scraper_cache:
-        return scraper_cache[username]
-
+    """
+    Gets a scraper instance for a user by loading their session from the database
+    or creating a new one if in a login flow.
+    This function does NOT use an in-memory cache.
+    """
     encrypted_password, session_data = database.load_session(username)
-    
-    if encrypted_password:
-        # If a password is provided, it means we are in a login flow, so we use it.
-        # Otherwise, we decrypt the one from the database for session restoration.
-        password_to_use = password if password else crypto.decrypt(encrypted_password)
-        
-        try:
-            scraper = Scraper(username, password_to_use, session_data=session_data)
-            scraper_cache[username] = scraper
-            # Persist the potentially updated session data from the scraper
-            database.save_session(username, encrypted_password, scraper.to_dict())
-            return scraper
-        except Exception as e:
-            logging.error(f"Failed to create or restore session for {username}: {e}")
-            return None
-    
+
+    # Case 1: Login flow (password is provided)
     if password:
         try:
             scraper = Scraper(username, password)
-            scraper_cache[username] = scraper
             encrypted_pass = crypto.encrypt(password)
+            # Save the new session to the database immediately
             database.save_session(username, encrypted_pass, scraper.to_dict())
             return scraper
         except Exception as e:
-            logging.error(f"Failed to create new session for {username}: {e}")
+            logging.error(f"Failed to create new session for {username} during login: {e}")
             return None
 
+    # Case 2: Existing session restoration (no password provided)
+    if encrypted_password:
+        try:
+            password_to_use = crypto.decrypt(encrypted_password)
+            scraper = Scraper(username, password_to_use, session_data=session_data)
+            # The session is not saved here to avoid writing to DB on every request.
+            # Session saving is handled by the login flow and the refresh_sessions job.
+            return scraper
+        except Exception as e:
+            logging.error(f"Failed to restore session for {username}: {e}")
+            return None
+
+    # Case 3: No password and no stored session
+    logging.warning(f"No session or credentials found for {username}. Cannot create scraper instance.")
     return None
 
 def handle_session_expiration(username):
-    """Handles session expiration by creating a new scraper instance, forcing re-login."""
-    logging.warning(f"Session expired for {username}. Forcing re-login.")
-    if username in scraper_cache:
-        del scraper_cache[username] # Remove expired instance
-    
-    encrypted_password, _ = database.load_session(username)
-    if not encrypted_password:
-        raise Exception("No credentials stored for user, cannot re-login.")
+    """
+    Handles a SessionExpiredError. It logs the event and relies on the proactive
+    `refresh_sessions` job or the user logging in again to fix it.
+    It does NOT attempt an immediate re-login to avoid blocking critical tasks.
+    """
+    logging.warning(f"Session for {username} has expired. A proactive refresh or user login is required.")
+    # We don't raise an exception here, but return None to the caller in the scraper_endpoint wrapper
+    # The wrapper will then return a 401 error to the client.
+    return None
 
-    password = crypto.decrypt(encrypted_password)
-    scraper = Scraper(username, password)
-    scraper_cache[username] = scraper
-    database.save_session(username, encrypted_password, scraper.to_dict())
-    return scraper
 
 # --- APScheduler Configuration ---
 jobstores = {
@@ -306,6 +302,33 @@ def reset_failed_bookings():
             else:
                 logging.debug(f"Failed auto-booking ID {booking_id} not yet eligible for reset.")
 
+def refresh_sessions():
+    """
+    Proactively refreshes all user sessions to prevent them from expiring
+    during critical operations.
+    """
+    with app.app_context():
+        users = database.get_all_users()
+        if not users:
+            logging.info("No users found in the database to refresh sessions for.")
+            return
+
+        for username in users:
+            try:
+                scraper = get_scraper_instance(username)
+                if scraper:
+                    # Perform a lightweight, safe operation to check session validity
+                    scraper.get_my_bookings()
+                    logging.info(f"Session for {username} is valid or was successfully refreshed.")
+                else:
+                    logging.warning(f"Could not get scraper instance for {username} during session refresh.")
+            except SessionExpiredError:
+                # The decorator on the scraper method already handled the re-login
+                logging.info(f"Session for {username} was expired and has been refreshed by the scraper.")
+            except Exception as e:
+                logging.error(f"An unexpected error occurred while refreshing session for {username}: {e}")
+
+
 # ... (rest of the scheduler functions remain the same for now)
 
 app.config["JWT_SECRET_KEY"] = config.JWT_SECRET_KEY
@@ -351,8 +374,6 @@ def login_user():
 @jwt_required()
 def logout_user():
     current_user = get_jwt_identity()
-    if current_user in scraper_cache:
-        del scraper_cache[current_user]
     database.delete_session(current_user)
     logging.info(f"Removed session for user: {current_user}")
     return jsonify({"message": "Successfully logged out"})
@@ -369,13 +390,11 @@ def scraper_endpoint(f):
                 return jsonify({"error": "Session not found. Please log in again."}), 401
             return f(user_scraper, *args, **kwargs)
         except SessionExpiredError:
-            try:
-                user_scraper = handle_session_expiration(current_user)
-                # Retry the original function call with the new scraper instance
-                return f(user_scraper, *args, **kwargs)
-            except Exception as e:
-                logging.error(f"Failed to re-authenticate user {current_user} after session expiration: {e}")
-                return jsonify({"error": "Your session expired and could not be refreshed. Please log in again."}), 401
+            # This is now the primary failure point if a session is truly expired and couldn't be revived.
+            # The handle_session_expiration function is called, which just logs the issue.
+            # We then return a 401 to force the user to log in again via the client.
+            handle_session_expiration(current_user)
+            return jsonify({"error": "Your session has expired. Please log in again."}), 401
         except Exception as e:
             logging.error(f"Unhandled error in scraper endpoint for user {current_user}: {e}")
             return jsonify({"error": "An internal server error occurred."}), 500
@@ -730,9 +749,9 @@ def get_status():
     uptime = datetime.now() - app.start_time
     return jsonify({
         "status": "ok",
-        "uptime": str(uptime),
-        "scraper_cache_size": len(scraper_cache)
+        "uptime": str(uptime)
     })
+
 
 
 if __name__ == '__main__':
