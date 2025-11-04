@@ -33,6 +33,7 @@ The application is designed with a decoupled architecture to ensure stability an
 -   **`logging_config.py`**: A centralized module that provides a consistent logging format for both the web server and the scheduler processes.
 -   **`scraper.py`**: A robust web scraping client that handles all interactions with the gym's website, including advanced headers to mimic a real browser and prevent blocking.
 -   **Proactive Session Refresh:** A dedicated scheduler job (`refresh_sessions`) runs periodically (every 2 hours) to ensure all active user sessions with the gym's website remain valid. This minimizes the risk of session expiration during critical booking windows.
+-   **Asynchronous & Non-Blocking Booking Logic**: The core auto-booking process has been heavily optimized for speed and reliability. The previous "pre-warming" step has been removed in favor of the proactive session refresh. Furthermore, I/O-intensive operations like writing debug HTML files upon failure are now handled by a dedicated, non-blocking background thread. This ensures that the main booking process is never delayed by slow disk operations, maximizing the chances of successfully booking a spot in a competitive, time-sensitive environment.
 
 ## Setup and Installation
 

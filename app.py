@@ -8,6 +8,8 @@ import logging
 from datetime import datetime, timedelta
 from functools import wraps
 from logging.handlers import RotatingFileHandler
+import queue
+import threading
 
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager, verify_jwt_in_request
 
@@ -39,6 +41,32 @@ origins = [
 CORS(app, resources={r"/api/*": {"origins": origins}}, supports_credentials=True)
 
 database.init_db()
+
+# --- Debug File Writer Thread ---
+debug_writer_queue = queue.Queue()
+
+def debug_file_writer():
+    """A worker thread that writes debug HTML files from a queue."""
+    while True:
+        try:
+            # Wait indefinitely for an item
+            filepath, content = debug_writer_queue.get()
+
+            # A None item is the signal to stop (for graceful shutdown, not used with daemon)
+            if filepath is None:
+                break
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(content)
+            logging.info(f"Successfully wrote debug file to {filepath}")
+            debug_writer_queue.task_done()
+        except Exception as e:
+            logging.error(f"Error in debug file writer thread: {e}")
+
+# Start the writer thread as a daemon so it exits when the main app exits
+writer_thread = threading.Thread(target=debug_file_writer, daemon=True)
+writer_thread.start()
+
 
 # --- Session Management ---
 
@@ -101,40 +129,6 @@ def process_auto_bookings():
         pending_bookings = database.get_pending_auto_bookings()
         now = datetime.now()
 
-        # --- Pre-warming Logic ---
-        for booking in pending_bookings:
-            booking_id, username, _, target_time, _, _, _, _, day_of_week, _, _, _, pre_warmed_date = booking
-            
-            days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
-            target_day_index = days_of_week_map.get(day_of_week)
-
-            if target_day_index is None:
-                continue
-
-            days_until_target = (target_day_index - now.weekday() + 7) % 7
-            next_occurrence_date = now + timedelta(days=days_until_target)
-            current_target_date_str = next_occurrence_date.strftime('%Y-%m-%d')
-
-            # Skip if already pre-warmed for this booking cycle
-            if pre_warmed_date == current_target_date_str:
-                continue
-
-            try:
-                target_datetime = datetime.strptime(f"{current_target_date_str} {target_time}", "%Y-%m-%d %H:%M")
-                booking_window_opens_dt = target_datetime - timedelta(hours=48)
-                pre_warm_start_dt = booking_window_opens_dt - timedelta(minutes=2)
-
-                if pre_warm_start_dt <= now < booking_window_opens_dt:
-                    logging.info(f"Pre-warming session for user {username} for booking {booking_id} opening at {booking_window_opens_dt}.")
-                    get_scraper_instance(username) # This will refresh the session if needed
-                    # Mark as pre-warmed for this cycle
-                    database.update_auto_booking_status(booking_id, 'pending', pre_warmed_date=current_target_date_str)
-
-            except ValueError:
-                logging.warning(f"Could not parse time for pre-warming check for booking {booking_id}. Skipping.")
-                continue
-        
-        # --- Booking Logic ---
         for booking_summary in pending_bookings:
             booking_id = booking_summary[0]
 
@@ -171,8 +165,6 @@ def process_auto_bookings():
                     database.update_auto_booking_status(booking_id, 'pending') # Release the lock
                     continue
                 
-                # The retry_count is now correctly fetched from the re-read booking record
-                
                 try:
                     user_scraper = get_scraper_instance(username)
                     if not user_scraper:
@@ -197,12 +189,9 @@ def process_auto_bookings():
                                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                                 debug_filename = f"debug_booking_{booking_id}_{timestamp}.html"
                                 debug_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), debug_filename)
-                                try:
-                                    with open(debug_filepath, 'w', encoding='utf-8') as f:
-                                        f.write(html_content)
-                                    logging.info(f"Saved debug HTML for booking {booking_id} to {debug_filename}")
-                                except Exception as e:
-                                    logging.error(f"Failed to save debug HTML for booking {booking_id}: {e}")
+                                # Put the file writing task into the queue instead of writing directly
+                                debug_writer_queue.put((debug_filepath, html_content))
+                                logging.info(f"Queued debug HTML for booking {booking_id} to be written to {debug_filename}")
 
                             if new_retry_count < 2:
                                 database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
@@ -236,6 +225,7 @@ def process_auto_bookings():
                 if current_booking_state and current_booking_state[4] == 'in_progress':
                      database.update_auto_booking_status(booking_id, 'pending')
                      logging.warning(f"Booking {booking_id} was left in 'in_progress' state and has been reset to 'pending'.")
+
 
 
 def send_cancellation_reminders():
