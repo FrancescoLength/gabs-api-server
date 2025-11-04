@@ -8,6 +8,7 @@ venv/
 # Ignore sensitive configuration
 .env
 static_timetable.json
+encryption.key
 
 # Ignore temporary debug files
 *.html

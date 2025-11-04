@@ -21,7 +21,8 @@ The GABS API Server prioritizes the security of user credentials. The system emp
 *   **Secure Session Management:** Upon successful authentication, encrypted credentials are utilized to establish and maintain a secure session with the gym's website. Session-specific data (cookies, CSRF tokens) is securely stored in an encrypted format within the SQLite database. An in-memory cache is explicitly avoided to minimize RAM usage on resource-constrained devices. A proactive background job periodically refreshes these sessions to ensure they remain active, maximizing reliability for time-critical bookings.
 *   **Strict Access Control:** Encrypted user passwords can only be accessed and decrypted by the automated booking system when strictly necessary to perform booking or scraping operations on behalf of the user.
 *   **Environment Variable Best Practices:** All sensitive keys, including the `JWT_SECRET_KEY`, VAPID keys for push notifications, and the `ENCRYPTION_KEY`, are managed through environment variables (typically loaded from a `.env` file). This practice prevents sensitive data from being exposed in version control or directly within the application's source code.
-*   **Data Purge on Logout:** Upon user logout, the encrypted password and associated session data are immediately and permanently removed from the database.
+*   **Isolated Encryption Key:** The master `ENCRYPTION_KEY` is loaded from a dedicated `encryption.key` file, isolating it from other configuration variables. This file should have strict permissions (e.g., `chmod 600`) and be excluded from version control.
+*   **Rate Limiting:** The login endpoint is protected with rate limiting, mitigating the risk of brute-force password guessing attacks.
 
 ## Architecture Overview
 
