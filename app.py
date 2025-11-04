@@ -463,47 +463,6 @@ def get_my_bookings(user_scraper):
 
     return jsonify(bookings)
 
-@app.route('/api/availability', methods=['GET'])
-@scraper_endpoint
-def get_availability(user_scraper):
-    class_name = request.args.get('class_name')
-    target_date = request.args.get('date')
-    if not class_name or not target_date:
-        return jsonify({"error": "class_name and date are required."} ), 400
-    result = user_scraper.get_class_availability(class_name, target_date)
-    return jsonify(result)
-
-@app.route('/api/instructors', methods=['GET'])
-@scraper_endpoint
-def get_instructors(user_scraper):
-    classes = user_scraper.get_classes(days_in_advance=7)
-    instructors = {}
-    for a_class in classes:
-        instructor_name = a_class.get('instructor')
-        if instructor_name and instructor_name != "N/A":
-            if instructor_name not in instructors:
-                instructors[instructor_name] = []
-            instructors[instructor_name].append({
-                'name': a_class['name'],
-                'date': a_class['date'],
-                'time': a_class['time']
-            })
-    return jsonify(instructors)
-
-@app.route('/api/classes-by-instructor', methods=['GET'])
-@scraper_endpoint
-def get_classes_by_instructor(user_scraper):
-    instructor_name_query = request.args.get('name')
-    if not instructor_name_query:
-        return jsonify({"error": "'name' query parameter is required."} ), 400
-    classes = user_scraper.get_classes(days_in_advance=7)
-    instructor_classes = []
-    for a_class in classes:
-        instructor_name = a_class.get('instructor')
-        if instructor_name and instructor_name_query.lower() in instructor_name.lower():
-            instructor_classes.append(a_class)
-    return jsonify(instructor_classes)
-
 # --- Unchanged endpoints ---
 
 @app.route('/api/static_classes', methods=['GET'])
@@ -607,48 +566,6 @@ def subscribe_push():
     except Exception as e:
         logging.error(f"Error saving push subscription for user {current_user}: {e}")
         return jsonify({"error": "Failed to save push subscription."} ), 500
-
-@app.route('/api/test-push-notification', methods=['POST'])
-@jwt_required()
-def test_push_notification():
-    current_user = get_jwt_identity()
-    logging.info(f"User {current_user} is requesting to send a test push notification.")
-
-    try:
-        all_subscriptions = database.get_all_push_subscriptions()
-        if not all_subscriptions:
-            return jsonify({"message": "No push subscriptions found."} ), 200
-
-        sent_count = 0
-        failed_count = 0
-        for sub in all_subscriptions:
-            try:
-                webpush(
-                    subscription_info=sub,
-                    data=json.dumps({
-                        "title": "Test Notifica Push!",
-                        "body": f"Ciao {sub['username']}! Questa  una notifica di test dal tuo backend GABS.",
-                        "icon": "/favicon.png",
-                        "badge": "/favicon.png",
-                        "tag": "test-notification",
-                        "url": "/my-bookings"
-                    }),
-                    vapid_private_key=config.VAPID_PRIVATE_KEY,
-                    vapid_claims={"sub": config.VAPID_ADMIN_EMAIL}
-                )
-                logging.info(f"Test push notification sent to {sub['username']} ({sub['endpoint']})")
-                sent_count += 1
-            except Exception as e:
-                logging.error(f"Error sending test push notification to {sub['username']} ({sub['endpoint']}): {e}")
-                if "410" in str(e):
-                    database.delete_push_subscription(sub['endpoint'])
-                    logging.info(f"Deleted invalid push subscription for user {sub['username']}: {sub['endpoint']}")
-                failed_count += 1
-        
-        return jsonify({"message": f"Test push notifications sent. Successful: {sent_count}, Failed: {failed_count}."}), 200
-    except Exception as e:
-        logging.error(f"Error in test_push_notification endpoint: {e}")
-        return jsonify({"error": "An internal server error occurred during test notification."} ), 500
 
 # --- Admin Endpoints ---
 

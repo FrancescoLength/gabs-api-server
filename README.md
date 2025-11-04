@@ -9,7 +9,6 @@ This Flask-based API server empowers users to seamlessly interact with a famous 
 -   **Effortless Booking & Waitlisting:** Book classes directly or automatically join the waiting list if a class is full.
 -   **Streamlined Cancellation:** Easily cancel existing bookings.
 -   **Personalized Booking Management:** View all your upcoming class bookings and waiting list entries.
--   **Real-time Availability Checks:** Instantly check the number of remaining spaces for any specific class.
 -   **Automated Recurring Bookings:** Schedule and manage recurring auto-bookings for your favorite classes. The scheduler runs in a dedicated process to ensure time-critical bookings are handled with high precision and concurrency.
 -   **Intelligent Push Notifications:** Receive timely push notifications, including crucial cancellation reminders.
 -   **Admin Panel:** Dedicated endpoints for administrators to monitor logs, auto-bookings, push subscriptions, and server status.
@@ -240,31 +239,6 @@ Logs the user out by clearing their session from the server's cache.
 
 ---
 
-### **Classes & Availability**
-
-#### `GET /api/classes`
-
-Gets a list of all available classes for the upcoming 7 days.
-
--   **Example `curl` Request:**
-    ```bash
-    curl -H "Authorization: Bearer <token>" http://127.0.0.1:5000/api/classes
-    ```
-
-#### `GET /api/availability`
-
-Gets the number of remaining spaces for a specific class on a given date.
-
--   **Query Parameters:**
-    -   `class_name` (string, required): The name of the class.
-    -   `date` (string, required): The date of the class in `YYYY-MM-DD` format.
--   **Example `curl` Request:**
-    ```bash
-    curl -H "Authorization: Bearer <token>" "http://127.0.0.1:5000/api/availability?class_name=Calorie%20Killer&date=2025-10-06"
-    ```
-
----
-
 ### **Booking & Cancellation**
 
 #### `POST /api/book`
@@ -391,30 +365,6 @@ Subscribes the current user to push notifications.
 -   **Example `curl` Request:**
     ```bash
     curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"endpoint":"...", "keys":{"p256dh":"...", "auth":"..."}}' http://127.0.0.1:5000/api/subscribe-push
-    ```
-
----
-
-### **Instructors**
-
-#### `GET /api/instructors`
-
-Gets a dictionary of all instructors, with each instructor's name as a key and a list of their scheduled classes as the value.
-
--   **Example `curl` Request:**
-    ```bash
-    curl -H "Authorization: Bearer <token>" http://127.0.0.1:5000/api/instructors
-    ```
-
-#### `GET /api/classes-by-instructor`
-
-Gets a list of all classes taught by a specific instructor.
-
--   **Query Parameters:**
-    -   `name` (string, required): The name of the instructor.
--   **Example `curl` Request:**
-    ```bash
-    curl -H "Authorization: Bearer <token>" "http://127.0.0.1:5000/api/classes-by-instructor?name=George"
     ```
 
 ---
