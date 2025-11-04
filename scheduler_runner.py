@@ -26,7 +26,7 @@ if __name__ == '__main__':
     # This allows multiple booking jobs to run in parallel, 
     # preventing one user's attempt from blocking another's.
     executors = {
-        'default': ThreadPoolExecutor(1)
+        'default': ThreadPoolExecutor(2)
     }
 
     scheduler = BackgroundScheduler(jobstores=jobstores, executors=executors)
@@ -35,13 +35,13 @@ if __name__ == '__main__':
     # The main booking job, runs at the start of every minute.
     scheduler.add_job(process_auto_bookings, 'interval', minutes=1, seconds=0, id='auto_booking_processor', replace_existing=True, max_instances=1)
     
-    # The cancellation reminder job, runs at 30 seconds past the minute to avoid conflict.
-    scheduler.add_job(send_cancellation_reminders, 'interval', minutes=1, seconds=30, id='cancellation_reminder_sender', replace_existing=True)
+    # The cancellation reminder job, runs every 5 minutes.
+    scheduler.add_job(send_cancellation_reminders, 'interval', minutes=5, id='cancellation_reminder_sender', replace_existing=True, max_instances=1)
     
     scheduler.add_job(reset_failed_bookings, 'interval', hours=24, id='reset_failed_bookings_job', replace_existing=True)
     
     scheduler.start()
-    logger.info("Scheduler started and running. Press Ctrl+C to exit.")
+    logger.info("Scheduler started and running.")
 
     try:
         # Keep the main thread alive, otherwise the script will exit.

@@ -87,11 +87,11 @@ For local development, you need to run two separate processes in two different t
 
 ### Production Deployment (systemd)
 
-For a robust production deployment on a Linux system (like a Raspberry Pi), it is highly recommended to manage the Gunicorn web server and the scheduler as `systemd` services. This ensures they start automatically on boot and are restarted if they crash.
+For a robust production deployment on a Linux system (like a Raspberry Pi), it is highly recommended to manage the Gunicorn web server, the scheduler, and the Ngrok tunnel as `systemd` services. This ensures they start automatically on boot and are restarted if they crash.
 
 **1. Create the Service Files:**
 
-You will need to create two service files in `/etc/systemd/system/`.
+You will need to create three service files in `/etc/systemd/system/`.
 
 **`gabs-api.service`** (for Gunicorn)
 ```ini
@@ -126,6 +126,22 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 ```
+
+**`gabs-ngrok.service`** (for Ngrok)
+```ini
+[Unit]
+Description=Ngrok Tunnel for GABS API
+After=network.target
+
+[Service]
+User=gabs-admin
+Group=gabs-admin
+ExecStart=/usr/local/bin/ngrok http 5000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
 *(Note: Ensure the `User`, `Group`, and paths in `WorkingDirectory` and `ExecStart` match your specific setup.)*
 
 **2. Enable and Start the Services:**
@@ -139,16 +155,18 @@ sudo systemctl daemon-reload
 # Enable the services to start on boot
 sudo systemctl enable gabs-api.service
 sudo systemctl enable gabs-scheduler.service
+sudo systemctl enable gabs-ngrok.service
 
 # Start the services immediately
 sudo systemctl start gabs-api.service
 sudo systemctl start gabs-scheduler.service
+sudo systemctl start gabs-ngrok.service
 ```
 
 **3. Managing the Services:**
 
 You can now manage the application using standard `systemctl` commands:
--   **Check Status:** `sudo systemctl status gabs-api` or `sudo systemctl status gabs-scheduler`
+-   **Check Status:** `sudo systemctl status gabs-api`, `sudo systemctl status gabs-scheduler`, `sudo systemctl status gabs-ngrok`
 -   **Stop:** `sudo systemctl stop gabs-api`
 -   **Start:** `sudo systemctl start gabs-api`
 -   **Restart:** `sudo systemctl restart gabs-api`

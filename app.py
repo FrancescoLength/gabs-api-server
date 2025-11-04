@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import logging
@@ -646,6 +647,18 @@ def test_push_notification():
 @admin_required
 def get_logs():
     log_pattern = re.compile(r'^(\S+ \S+) - (\w+) - (.*)')
+    ssh_tunnel_url = None
+    try:
+        tunnels_response = requests.get('http://127.0.0.1:4040/api/tunnels')
+        tunnels_response.raise_for_status()
+        tunnels_data = tunnels_response.json()
+        for tunnel in tunnels_data.get('tunnels', []):
+            if tunnel.get('proto') == 'tcp':
+                ssh_tunnel_url = tunnel.get('public_url')
+                break
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Could not fetch ngrok tunnels: {e}")
+
     try:
         with open(LOG_FILE, 'r') as f:
             lines = f.readlines()
@@ -667,7 +680,7 @@ def get_logs():
                             "level": "RAW",
                             "message": line.strip()
                         })
-            return jsonify({"logs": parsed_logs})
+            return jsonify({"logs": parsed_logs, "ssh_tunnel_url": ssh_tunnel_url})
     except FileNotFoundError:
         return jsonify({"error": "Log file not found."} ), 404
 

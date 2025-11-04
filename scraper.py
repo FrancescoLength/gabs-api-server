@@ -6,6 +6,7 @@ from datetime import date, timedelta, datetime
 import re
 from thefuzz import fuzz
 import random
+import time
 
 # --- Custom Exceptions ---
 class SessionExpiredError(Exception):
@@ -190,6 +191,7 @@ class Scraper:
     @handle_session_expiry
     def _get_classes_for_single_date(self, target_date_str):
         """Helper method to fetch class HTML for a single date."""
+        time.sleep(random.uniform(1, 2))
         if self.disabled_until and datetime.now() < self.disabled_until:
             raise Exception(f"Scraper for {self.username} is temporarily disabled.")
 
