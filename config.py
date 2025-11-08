@@ -14,8 +14,6 @@ VAPID_ADMIN_EMAIL = os.getenv("VAPID_ADMIN_EMAIL")
 
 ENCRYPTION_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'encryption.key')
 
-# Chiave per la crittografia dei dati sensibili (es. password salvate)
-# Caricata da un file separato per maggiore sicurezza.
 try:
     with open(ENCRYPTION_KEY_FILE, 'r') as f:
         ENCRYPTION_KEY = f.read().strip()

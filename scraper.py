@@ -460,7 +460,7 @@ class Scraper:
     @handle_session_expiry
     def get_my_bookings(self):
         """Scrapes the members area to get a list of current bookings and waiting list entries."""
-        logging.info("Attempting to scrape members area for bookings...")
+        logging.debug("Attempting to scrape members area for bookings...")
         response = self.session.get(MEMBERS_URL, headers={'User-Agent': self.user_agent})
         response.raise_for_status()
 
@@ -502,7 +502,7 @@ class Scraper:
             else:
                 logging.warning(f"Could not parse booking string: {full_text}")
 
-        logging.info(f"Successfully parsed {len(my_bookings)} bookings.")
+        logging.debug(f"Successfully parsed {len(my_bookings)} bookings.")
         return my_bookings
 
     @handle_session_expiry

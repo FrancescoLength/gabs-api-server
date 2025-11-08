@@ -234,8 +234,6 @@ def process_auto_bookings():
                      database.update_auto_booking_status(booking_id, 'pending')
                      logging.warning(f"Booking {booking_id} was left in 'in_progress' state and has been reset to 'pending'.")
 
-
-
 def send_cancellation_reminders():
     with app.app_context():
         logging.info("Running send_cancellation_reminders job.")
@@ -317,7 +315,7 @@ def refresh_sessions():
                 if scraper:
                     # Perform a lightweight, safe operation to check session validity
                     scraper.get_my_bookings()
-                    logging.info(f"Session for {username} is valid or was successfully refreshed.")
+                    logging.debug(f"Session for {username} is valid or was successfully refreshed.")
                 else:
                     logging.warning(f"Could not get scraper instance for {username} during session refresh.")
             except SessionExpiredError:
@@ -325,9 +323,6 @@ def refresh_sessions():
                 logging.info(f"Session for {username} was expired and has been refreshed by the scraper.")
             except Exception as e:
                 logging.error(f"An unexpected error occurred while refreshing session for {username}: {e}")
-
-
-# ... (rest of the scheduler functions remain the same for now)
 
 app.config["JWT_SECRET_KEY"] = config.JWT_SECRET_KEY
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
@@ -423,8 +418,6 @@ def book_class(user_scraper):
     )
     return jsonify(result), 200
 
-# ... (all other scraper-dependent endpoints need to be wrapped with @scraper_endpoint)
-
 @app.route('/api/cancel', methods=['POST'])
 @scraper_endpoint
 def cancel_booking(user_scraper):
@@ -471,8 +464,6 @@ def get_my_bookings(user_scraper):
                 logging.info(f"Added live booking for {current_user}: {class_name} on {class_date} at {class_time} to database.")
 
     return jsonify(bookings)
-
-# --- Unchanged endpoints ---
 
 @app.route('/api/static_classes', methods=['GET'])
 def get_static_classes():
