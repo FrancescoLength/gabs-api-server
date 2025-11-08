@@ -152,7 +152,7 @@ def process_auto_bookings():
                     logging.warning(f"Could not refetch booking {booking_id} or status was not 'in_progress' after locking. Skipping.")
                     continue
 
-                booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent, pre_warmed_date = booking
+                booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent = booking
 
                 today = datetime.now()
                 days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
@@ -185,7 +185,7 @@ def process_auto_bookings():
                     
                     result_message = result.get('message', '').lower()
                     if result.get('status') == 'success' or (result.get('status') == 'info' and ("already registered" in result_message or "waiting list" in result_message or "already booked" in result_message)):
-                        database.update_auto_booking_status(booking_id, 'pending', last_booked_date=current_target_date, last_attempt_at=int(datetime.now().timestamp()), pre_warmed_date=None, retry_count=0)
+                        database.update_auto_booking_status(booking_id, 'pending', last_booked_date=current_target_date, last_attempt_at=int(datetime.now().timestamp()), retry_count=0)
                         database.add_live_booking(username, class_name, current_target_date, target_time, instructor, booking_id)
                         logging.info(f"Successfully processed booking for auto-booking {booking_id}. Status: {result.get('message')}")
                     else:
@@ -263,7 +263,7 @@ def send_cancellation_reminders():
                                 subscription_info=sub,
                                 data=json.dumps({
                                     "title": "Reminder: Cancel Your Class!",
-                                    "body": f"Don't forget to cancel your {class_name} class on {class_date_str} at {class_time_str} if you can't make it!",
+                                    "body": f"If today you can't make {class_name} class at {class_time_str}, don't forget to cancel it within ~30 minutes!",
                                     "icon": "/favicon.png",
                                     "badge": "/favicon.png",
                                     "tag": f"cancellation-reminder-{booking_id}",
@@ -430,6 +430,11 @@ def cancel_booking(user_scraper):
     
     logging.info(f"User {user_scraper.username} attempting to cancel class {class_name} on {target_date} at {target_time}")
     result = user_scraper.find_and_cancel_booking(class_name, target_date, target_time)
+    
+    if result.get('status') == 'success':
+        database.delete_live_booking(user_scraper.username, class_name, target_date, target_time)
+        logging.info(f"Deleted live booking for {user_scraper.username}: {class_name} on {target_date} at {target_time} from database.")
+
     return jsonify(result), 200
 
 @app.route('/api/bookings', methods=['GET'])
