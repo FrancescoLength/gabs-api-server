@@ -80,12 +80,16 @@ def save_push_subscription(username, subscription_info):
         # Update existing subscription
         cursor.execute("UPDATE push_subscriptions SET username = ?, p256dh = ?, auth = ?, created_at = ? WHERE endpoint = ?",
                        (username, p256dh, auth, created_at, endpoint))
+        conn.commit()
+        conn.close()
+        return False
     else:
         # Insert new subscription
         cursor.execute("INSERT INTO push_subscriptions (username, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?)",
                        (username, endpoint, p256dh, auth, created_at))
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
+        return True
 
 def get_push_subscriptions_for_user(username):
     conn = sqlite3.connect(DATABASE_FILE)

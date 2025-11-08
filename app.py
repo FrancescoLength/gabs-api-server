@@ -565,8 +565,9 @@ def subscribe_push():
         return jsonify({"error": "Subscription info is required."} ), 400
 
     try:
-        database.save_push_subscription(current_user, subscription_info)
-        logging.info(f"Push subscription saved for user: {current_user}")
+        new_subscription = database.save_push_subscription(current_user, subscription_info)
+        if new_subscription:
+            logging.info(f"Push subscription saved for user: {current_user}")
         return jsonify({"message": "Push subscription successful"}), 201
     except Exception as e:
         logging.error(f"Error saving push subscription for user {current_user}: {e}")
