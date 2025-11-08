@@ -579,18 +579,6 @@ def subscribe_push():
 @admin_required
 def get_logs():
     log_pattern = re.compile(r'^(\S+ \S+) - (\w+) - (.*)')
-    ssh_tunnel_url = None
-    try:
-        tunnels_response = requests.get('http://127.0.0.1:4040/api/tunnels')
-        tunnels_response.raise_for_status()
-        tunnels_data = tunnels_response.json()
-        for tunnel in tunnels_data.get('tunnels', []):
-            if tunnel.get('proto') == 'tcp':
-                ssh_tunnel_url = tunnel.get('public_url')
-                break
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Could not fetch ngrok tunnels: {e}")
-
     try:
         with open(LOG_FILE, 'r') as f:
             lines = f.readlines()
@@ -612,7 +600,7 @@ def get_logs():
                             "level": "RAW",
                             "message": line.strip()
                         })
-            return jsonify({"logs": parsed_logs, "ssh_tunnel_url": ssh_tunnel_url})
+            return jsonify({"logs": parsed_logs})
     except FileNotFoundError:
         return jsonify({"error": "Log file not found."} ), 404
 
@@ -660,9 +648,29 @@ def get_all_sessions():
 @admin_required
 def get_status():
     uptime = datetime.now() - app.start_time
+    ssh_command = None
+    try:
+        tunnels_response = requests.get('http://127.0.0.1:4040/api/tunnels')
+        tunnels_response.raise_for_status()
+        tunnels_data = tunnels_response.json()
+        for tunnel in tunnels_data.get('tunnels', []):
+            if tunnel.get('proto') == 'tcp':
+                public_url = tunnel.get('public_url')
+                if public_url:
+                    # Extract host and port
+                    match = re.match(r'tcp://(.+):(\d+)', public_url)
+                    if match:
+                        host = match.group(1)
+                        port = match.group(2)
+                        ssh_command = f"ssh -p {port} gabs-admin@{host}"
+                break
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Could not fetch ngrok tunnels: {e}")
+
     return jsonify({
         "status": "ok",
-        "uptime": str(uptime)
+        "uptime": str(uptime),
+        "ssh_tunnel_command": ssh_command
     })
 
 
