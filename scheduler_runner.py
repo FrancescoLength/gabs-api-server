@@ -31,17 +31,20 @@ if __name__ == '__main__':
 
     scheduler = BackgroundScheduler(jobstores=jobstores, executors=executors)
 
-    # Add jobs to the scheduler
+    # Add jobs to the scheduler using cron triggers for precise timing.
+    
     # The main booking job, runs at the start of every minute.
-    scheduler.add_job(process_auto_bookings, 'interval', minutes=1, seconds=0, id='auto_booking_processor', replace_existing=True, max_instances=1)
+    # Using second=1 to provide a small buffer.
+    scheduler.add_job(process_auto_bookings, 'cron', minute='*', second=1, id='auto_booking_processor', replace_existing=True, max_instances=1)
     
     # The cancellation reminder job, runs every 5 minutes.
-    scheduler.add_job(send_cancellation_reminders, 'interval', minutes=5, id='cancellation_reminder_sender', replace_existing=True, max_instances=1, misfire_grace_time=30)
+    scheduler.add_job(send_cancellation_reminders, 'cron', minute='*/5', second=1, id='cancellation_reminder_sender', replace_existing=True, max_instances=1, misfire_grace_time=30)
     
-    scheduler.add_job(reset_failed_bookings, 'interval', hours=24, id='reset_failed_bookings_job', replace_existing=True)
+    # The reset failed bookings job, runs once daily just after midnight.
+    scheduler.add_job(reset_failed_bookings, 'cron', hour=0, minute=0, second=1, id='reset_failed_bookings_job', replace_existing=True)
     
-    # Proactively refresh all user sessions every 30 minutes.
-    scheduler.add_job(refresh_sessions, 'interval', hours=2, id='session_refresher', replace_existing=True)
+    # Proactively refresh all user sessions every 2 hours.
+    scheduler.add_job(refresh_sessions, 'cron', hour='*/2', minute=0, second=1, id='session_refresher', replace_existing=True)
     
     scheduler.start()
     logger.info("Scheduler started and running.")
