@@ -151,8 +151,12 @@ class Scraper:
                 return True
             else:
                 raise Exception(f"Login failed. Server responded with: {response.text}")
-        except Exception as e:
-            logging.error(f"An error occurred during login for {self.username}: {e}")
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 500 and e.request.url == LOGIN_URL:
+                logging.warning(f"Login failed for {self.username} with a 500 error, which may indicate an incorrect password.")
+            else:
+                logging.error(f"HTTP Error during login for {self.username}: {e.response.status_code} - {e.response.reason} for url: {e.request.url}")
+            
             self.relogin_failures += 1
             if self.relogin_failures >= 3:
                 self.disabled_until = datetime.now() + timedelta(minutes=15)
