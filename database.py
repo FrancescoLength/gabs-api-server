@@ -326,7 +326,7 @@ def delete_session(username):
 def get_all_users():
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT username FROM auto_bookings")
+    cursor.execute("SELECT DISTINCT username FROM sessions")
     users = [row[0] for row in cursor.fetchall()]
     conn.close()
     return users
