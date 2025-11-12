@@ -35,7 +35,7 @@ def init_db():
             class_time TEXT NOT NULL, -- HH:MM
             instructor TEXT,
             reminder_sent INTEGER DEFAULT 0, -- 0 for not sent, 1 for sent
-            created_at INTEGER NOT NULL, -- Unix timestamp
+            created_at TEXT NOT NULL, -- DD/MM/YY HH:MM:SS
             auto_booking_id INTEGER, -- Optional: Link to auto_bookings if originated from there
             FOREIGN KEY (auto_booking_id) REFERENCES auto_bookings(id)
         )
@@ -234,13 +234,21 @@ def get_all_auto_bookings():
 def add_live_booking(username, class_name, class_date, class_time, instructor=None, auto_booking_id=None):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    created_at = int(datetime.now().timestamp())
+    created_at = datetime.now().strftime('%d/%m/%y %H:%M:%S')
     cursor.execute("INSERT INTO live_bookings (username, class_name, class_date, class_time, instructor, reminder_sent, created_at, auto_booking_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                    (username, class_name, class_date, class_time, instructor, 0, created_at, auto_booking_id))
     conn.commit()
     booking_id = cursor.lastrowid
     conn.close()
     return booking_id
+
+def get_live_bookings_for_user(username):
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM live_bookings WHERE username = ?", (username,))
+    bookings = cursor.fetchall()
+    conn.close()
+    return bookings
 
 def get_live_bookings_for_reminder():
     conn = sqlite3.connect(DATABASE_FILE)

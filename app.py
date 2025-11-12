@@ -300,8 +300,7 @@ def reset_failed_bookings():
 
 def refresh_sessions():
     """
-    Proactively refreshes all user sessions to prevent them from expiring
-    during critical operations.
+    Proactively refreshes all user sessions and syncs their live bookings.
     """
     with app.app_context():
         users = database.get_all_users()
@@ -314,8 +313,9 @@ def refresh_sessions():
                 scraper = get_scraper_instance(username)
                 if scraper:
                     # Perform a lightweight, safe operation to check session validity
-                    scraper.get_my_bookings()
-                    logging.debug(f"Session for {username} is valid or was successfully refreshed.")
+                    bookings = scraper.get_my_bookings()
+                    sync_live_bookings(username, bookings)
+                    logging.debug(f"Session for {username} is valid and bookings synced.")
                 else:
                     logging.warning(f"Could not get scraper instance for {username} during session refresh.")
             except SessionExpiredError:
@@ -440,35 +440,59 @@ def cancel_booking(user_scraper):
 @app.route('/api/bookings', methods=['GET'])
 @scraper_endpoint
 def get_my_bookings(user_scraper):
-    current_user = get_jwt_identity()
     bookings = user_scraper.get_my_bookings()
-    
-    for booking in bookings:
+    sync_live_bookings(user_scraper.username, bookings)
+    return jsonify(bookings)
+
+def sync_live_bookings(username, scraped_bookings):
+    """
+    Synchronizes the live_bookings table for a user with a fresh list of scraped bookings.
+    """
+    # 1. Get all current live bookings for the user from the database
+    db_bookings_raw = database.get_live_bookings_for_user(username)
+    db_bookings = set()
+    for b in db_bookings_raw:
+        # Create a unique tuple for each booking
+        db_bookings.add((b[2], b[3], b[4])) # class_name, class_date, class_time
+
+    # 2. Get all scraped bookings
+    scraped_bookings_set = set()
+    for booking in scraped_bookings:
         class_name = booking.get('name')
         class_date_raw = booking.get('date')
         class_time = booking.get('time')
-        instructor = booking.get('instructor')
-
+        
         if class_name and class_date_raw and class_time:
-            # Parse the date from the scraper (e.g., 'Tuesday 21st October') to 'YYYY-MM-DD'
             try:
-                # Example: 'Tuesday 21st October' -> '21 October'
-                date_part = ' '.join(class_date_raw.split(' ')[1:]) 
-                # Remove 'st', 'nd', 'rd', 'th' from day
+                date_part = ' '.join(class_date_raw.split(' ')[1:])
                 date_part = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_part)
-                # Add current year for parsing
                 current_year = datetime.now().year
                 parsed_date = datetime.strptime(f"{date_part} {current_year}", "%d %B %Y")
                 class_date = parsed_date.strftime("%Y-%m-%d")
+                scraped_bookings_set.add((class_name, class_date, class_time))
             except Exception as e:
-                logging.error(f"Error parsing date '{class_date_raw}': {e}")
-                continue # Skip this booking if date parsing fails
+                logging.error(f"Error parsing date '{class_date_raw}' during sync: {e}")
+                continue
 
-            if not database.live_booking_exists(current_user, class_name, class_date, class_time):
-                database.add_live_booking(current_user, class_name, class_date, class_time, instructor)
-                logging.info(f"Added live booking for {current_user}: {class_name} on {class_date} at {class_time} to database.")
+    # 3. Find bookings to add and to delete
+    bookings_to_add = scraped_bookings_set - db_bookings
+    bookings_to_delete = db_bookings - scraped_bookings_set
 
-    return jsonify(bookings)
+    # 4. Add new bookings
+    for class_name, class_date, class_time in bookings_to_add:
+        # Find the full booking details from the original scraped list
+        full_booking = next((b for b in scraped_bookings if b.get('name') == class_name and b.get('time') == class_time), None)
+        instructor = full_booking.get('instructor') if full_booking else None
+        
+        if not database.live_booking_exists(username, class_name, class_date, class_time):
+            database.add_live_booking(username, class_name, class_date, class_time, instructor)
+            logging.info(f"Added live booking for {username}: {class_name} on {class_date} at {class_time} to database.")
+
+    # 5. Delete old bookings
+    for class_name, class_date, class_time in bookings_to_delete:
+        database.delete_live_booking(username, class_name, class_date, class_time)
+        logging.info(f"Deleted stale live booking for {username}: {class_name} on {class_date} at {class_time} from database.")
+
 
 @app.route('/api/static_classes', methods=['GET'])
 def get_static_classes():
