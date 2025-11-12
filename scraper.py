@@ -312,9 +312,14 @@ class Scraper:
                     best_match_element = gym_class
 
         # Second pass: execute booking for the best match found
-        if best_match_element and highest_score > 51:
+        # Extract title here so it's available in the else block
+        found_class_title = "N/A"
+        if best_match_element:
             title_tag = best_match_element.find('h2', {'class': 'title'})
-            title = title_tag.text.strip() if title_tag else "Unknown"
+            found_class_title = title_tag.text.strip() if title_tag else "Unknown"
+
+        if best_match_element and highest_score > 46:
+            title = found_class_title # Use the extracted title
             logging.info(f"Found best match for '{class_name}': '{title}' with score {highest_score}")
 
             already_booked_msg = best_match_element.find(string=re.compile("you are already registered|you are on the waiting list", re.I))
@@ -363,7 +368,7 @@ class Scraper:
             return {"status": "success", "action": action_description, "details": response.json()}
         else:
             if target_time and class_name:
-                 return {"status": "error", "message": f"Could not find a suitable match for '{class_name}' at {target_time}. Best match score was {highest_score}.", "html_content": classes_html}
+                 return {"status": "error", "message": f"Could not find a suitable match for '{class_name}' at {target_time}. Best match score was {highest_score}. Closest match found: '{found_class_title}'.", "html_content": classes_html}
             else:
                  return {"status": "error", "message": f"Specified class '{class_name}' not found."}
 
