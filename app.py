@@ -650,6 +650,12 @@ def get_all_auto_bookings():
         })
     return jsonify(bookings_formatted)
 
+@app.route('/api/admin/live_bookings', methods=['GET'])
+@admin_required
+def get_all_live_bookings():
+    bookings = database.get_all_live_bookings()
+    return jsonify(bookings)
+
 @app.route('/api/admin/push_subscriptions', methods=['GET'])
 @admin_required
 def get_all_push_subscriptions():

@@ -231,6 +231,15 @@ def get_all_auto_bookings():
     conn.close()
     return bookings
 
+def get_all_live_bookings():
+    conn = sqlite3.connect(DATABASE_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, class_name, class_date, class_time, instructor, reminder_sent, created_at, auto_booking_id FROM live_bookings ORDER BY id DESC")
+    bookings = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return bookings
+
 def add_live_booking(username, class_name, class_date, class_time, instructor=None, auto_booking_id=None):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
