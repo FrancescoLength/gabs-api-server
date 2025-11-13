@@ -262,12 +262,12 @@ def send_cancellation_reminders():
                             webpush(
                                 subscription_info=sub,
                                 data=json.dumps({
-                                    "title": "Reminder: Cancel Your Class!",
+                                    "title": "GABS Reminder",
                                     "body": f"If today you can't make {class_name} class at {class_time_str}, don't forget to cancel it within ~30 minutes!",
                                     "icon": "/favicon.png",
                                     "badge": "/favicon.png",
                                     "tag": f"cancellation-reminder-{booking_id}",
-                                    "url": "/my-bookings"
+                                    "url": "/live-booking"
                                 }),
                                 vapid_private_key=config.VAPID_PRIVATE_KEY,
                                 vapid_claims={"sub": f"mailto:{config.VAPID_ADMIN_EMAIL}"}
