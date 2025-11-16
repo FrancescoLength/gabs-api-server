@@ -47,8 +47,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS push_subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
-            subscription_info TEXT NOT NULL,
-            endpoint TEXT UNIQUE NOT NULL
+            endpoint TEXT UNIQUE NOT NULL,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            created_at INTEGER NOT NULL
         )
     ''')
 
@@ -275,16 +277,27 @@ def save_push_subscription(username, subscription_info):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     endpoint = subscription_info.get('endpoint')
-    cursor.execute("INSERT OR REPLACE INTO push_subscriptions (username, subscription_info, endpoint) VALUES (?, ?, ?)",
-                   (username, json.dumps(subscription_info), endpoint))
+    p256dh = subscription_info.get('keys', {}).get('p256dh')
+    auth = subscription_info.get('keys', {}).get('auth')
+    created_at = int(datetime.now().timestamp()) # Add created_at
+    cursor.execute("INSERT OR REPLACE INTO push_subscriptions (username, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?)",
+                   (username, endpoint, p256dh, auth, created_at))
     conn.commit()
     conn.close()
 
 def get_push_subscriptions_for_user(username):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT subscription_info FROM push_subscriptions WHERE username = ?", (username,))
-    subscriptions = [json.loads(row[0]) for row in cursor.fetchall()]
+    cursor.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE username = ?", (username,))
+    subscriptions = []
+    for row in cursor.fetchall():
+        subscriptions.append({
+            "endpoint": row[0],
+            "keys": {
+                "p256dh": row[1],
+                "auth": row[2]
+            }
+        })
     conn.close()
     return subscriptions
 
@@ -300,8 +313,19 @@ def delete_push_subscription(endpoint):
 def get_all_push_subscriptions():
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT username, subscription_info FROM push_subscriptions")
-    subscriptions = [{'username': row[0], 'subscription_info': json.loads(row[1])} for row in cursor.fetchall()]
+    cursor.execute("SELECT username, endpoint, p256dh, auth FROM push_subscriptions")
+    subscriptions = []
+    for row in cursor.fetchall():
+        subscriptions.append({
+            "username": row[0],
+            "subscription_info": {
+                "endpoint": row[1],
+                "keys": {
+                    "p256dh": row[2],
+                    "auth": row[3]
+                }
+            }
+        })
     conn.close()
     return subscriptions
 

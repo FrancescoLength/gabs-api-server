@@ -662,17 +662,17 @@ def get_all_auto_bookings():
     bookings_formatted = []
     for b in bookings_raw:
         bookings_formatted.append({
-            "id": b[0],
-            "username": b[1],
-            "class_name": b[2],
-            "target_time": b[3],
-            "status": b[4],
-            "created_at": b[5],
-            "last_attempt_at": b[6],
-            "retry_count": b[7],
-            "day_of_week": b[8],
-            "instructor": b[9],
-            "last_booked_date": b[10]
+            "id": b["id"],
+            "username": b["username"],
+            "class_name": b["class_name"],
+            "target_time": b["target_time"],
+            "status": b["status"],
+            "created_at": b["created_at"],
+            "last_attempt_at": b["last_attempt_at"],
+            "retry_count": b["retry_count"],
+            "day_of_week": b["day_of_week"],
+            "instructor": b["instructor"],
+            "last_booked_date": b["last_booked_date"]
         })
     return jsonify(bookings_formatted)
 
