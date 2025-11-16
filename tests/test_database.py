@@ -2,15 +2,9 @@ import pytest
 import sqlite3
 from datetime import datetime
 import database
+import threading
 
-@pytest.fixture
-def memory_db(monkeypatch):
-    db_uri = "file::memory:?cache=shared"
-    monkeypatch.setattr(database, "DATABASE_FILE", db_uri)
-    conn = sqlite3.connect(db_uri, uri=True)
-    database.init_db()
-    yield conn
-    conn.close()
+
 
 def test_add_auto_booking(memory_db):
     username = "test_user"
@@ -123,3 +117,154 @@ def test_get_failed_auto_bookings(memory_db):
 
     assert len(failed_bookings) == 1
     assert failed_bookings[0][0] == booking_id
+
+def test_save_and_load_session(memory_db):
+    username = "test_user"
+    encrypted_password = "test_password"
+    session_data = {"cookies": {"key": "value"}}
+    database.save_session(username, encrypted_password, session_data)
+
+    loaded_password, loaded_session_data = database.load_session(username)
+
+    assert loaded_password == encrypted_password
+    assert loaded_session_data == session_data
+
+def test_load_non_existent_session(memory_db):
+    loaded_password, loaded_session_data = database.load_session("non_existent_user")
+    assert loaded_password is None
+    assert loaded_session_data is None
+
+def test_delete_session(memory_db):
+    username = "test_user"
+    database.save_session(username, "password", {"key": "value"})
+    
+    result = database.delete_session(username)
+    assert result is True
+
+    loaded_password, loaded_session_data = database.load_session(username)
+    assert loaded_password is None
+    assert loaded_session_data is None
+
+def test_get_all_users(memory_db):
+    database.save_session("user1", "pass1", {})
+    database.save_session("user2", "pass2", {})
+    database.save_session("user1", "pass1_updated", {}) # Test uniqueness
+
+    users = database.get_all_users()
+
+    assert len(users) == 2
+    assert "user1" in users
+    assert "user2" in users
+
+def test_get_all_sessions(memory_db):
+    database.save_session("user1", "pass1", {"c": 1})
+    database.save_session("user2", "pass2", {"c": 2})
+
+    sessions = database.get_all_sessions()
+
+    assert len(sessions) == 2
+    assert sessions[0]['username'] == 'user1'
+    assert sessions[1]['username'] == 'user2'
+
+def test_add_and_get_live_booking(memory_db):
+    username = "test_user"
+    class_name = "Test Live Class"
+    class_date = "2025-12-25"
+    class_time = "12:00"
+    instructor = "Santa"
+    
+    booking_id = database.add_live_booking(username, class_name, class_date, class_time, instructor)
+    
+    bookings = database.get_live_bookings_for_user(username)
+    
+    assert len(bookings) == 1
+    booking = bookings[0]
+    assert booking[1] == username
+    assert booking[2] == class_name
+    assert booking[3] == class_date
+    assert booking[4] == class_time
+    assert booking[5] == instructor
+
+def test_live_booking_exists(memory_db):
+    username = "test_user"
+    class_name = "Test Live Class"
+    class_date = "2025-12-25"
+    class_time = "12:00"
+    
+    database.add_live_booking(username, class_name, class_date, class_time)
+    
+    assert database.live_booking_exists(username, class_name, class_date, class_time) is True
+    assert database.live_booking_exists(username, "Another Class", class_date, class_time) is False
+
+def test_delete_live_booking(memory_db):
+    username = "test_user"
+    class_name = "Test Live Class"
+    class_date = "2025-12-25"
+    class_time = "12:00"
+    
+    database.add_live_booking(username, class_name, class_date, class_time)
+    
+    result = database.delete_live_booking(username, class_name, class_date, class_time)
+    assert result is True
+    
+    assert database.live_booking_exists(username, class_name, class_date, class_time) is False
+
+def test_get_live_bookings_for_reminder(memory_db):
+    booking_id_1 = database.add_live_booking("user1", "Class 1", "2025-12-25", "10:00")
+    database.update_live_booking_reminder_status(booking_id_1, reminder_sent=1)
+    database.add_live_booking("user2", "Class 2", "2025-12-25", "11:00")
+    database.add_live_booking("user1", "Class 3", "2025-12-25", "12:00")
+    
+    reminders = database.get_live_bookings_for_reminder()
+    
+    assert len(reminders) == 2
+    assert reminders[0][2] == "Class 2"
+    assert reminders[1][2] == "Class 3"
+
+def test_update_live_booking_reminder_status(memory_db):
+    booking_id = database.add_live_booking("user1", "Class 1", "2025-12-25", "10:00")
+    
+    database.update_live_booking_reminder_status(booking_id, reminder_sent=1)
+    
+    reminders = database.get_live_bookings_for_reminder()
+    assert len(reminders) == 0
+
+def test_lock_auto_booking(memory_db):
+    booking_id = database.add_auto_booking("test_user", "Test Class", "10:00", "Monday", "Test Instructor")
+    
+    # First lock should succeed
+    assert database.lock_auto_booking(booking_id) is True
+    
+    # Check status
+    cursor = memory_db.cursor()
+    cursor.execute("SELECT status FROM auto_bookings WHERE id = ?", (booking_id,))
+    status = cursor.fetchone()[0]
+    assert status == 'in_progress'
+    
+    # Second lock should fail
+    assert database.lock_auto_booking(booking_id) is False
+
+def test_lock_auto_booking_concurrency(memory_db):
+    booking_id = database.add_auto_booking("test_user", "Test Class", "10:00", "Monday", "Test Instructor")
+    
+    results = []
+    lock = threading.Lock()
+
+    def worker():
+        try:
+            result = database.lock_auto_booking(booking_id)
+            with lock:
+                results.append(result)
+        except sqlite3.OperationalError:
+            with lock:
+                results.append(False)
+
+    threads = [threading.Thread(target=worker) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+        
+    # Only one thread should have acquired the lock
+    assert results.count(True) == 1
+    assert results.count(False) == 4

@@ -455,12 +455,12 @@ def sync_live_bookings(username, scraped_bookings):
     # 1. Get all current live bookings for the user from the database
     db_bookings_raw = database.get_live_bookings_for_user(username)
     db_bookings = set()
-    db_bookings_map = {}  # Map to store original case
+    db_bookings_map = {}  # Map to store original case and id
     for b in db_bookings_raw:
         # Create a unique tuple for each booking in lowercase
         key = (b[2].lower(), b[3], b[4]) # class_name, class_date, class_time
         db_bookings.add(key)
-        db_bookings_map[key] = b[2] # Store original class name
+        db_bookings_map[key] = {'name': b[2], 'id': b[0]} # Store original class name and id
 
     # 2. Get all scraped bookings
     scraped_bookings_set = set()
@@ -484,11 +484,23 @@ def sync_live_bookings(username, scraped_bookings):
                 logging.error(f"Error parsing date '{class_date_raw}' during sync: {e}")
                 continue
 
-    # 3. Find bookings to add and to delete
+    # 3. Find bookings to add, to delete, and to check for case changes
     bookings_to_add = scraped_bookings_set - db_bookings
     bookings_to_delete = db_bookings - scraped_bookings_set
+    bookings_to_check = db_bookings.intersection(scraped_bookings_set)
 
-    # 4. Add new bookings
+    # 4. Check for case changes in existing bookings
+    for key in bookings_to_check:
+        scraped_name = scraped_bookings_map[key]
+        db_info = db_bookings_map[key]
+        db_name = db_info['name']
+        
+        if scraped_name != db_name:
+            booking_id = db_info['id']
+            database.update_live_booking_name(booking_id, scraped_name)
+            logging.info(f"Updated class name case for booking ID {booking_id} from '{db_name}' to '{scraped_name}'.")
+
+    # 5. Add new bookings
     for key in bookings_to_add:
         class_name_lower, class_date, class_time = key
         class_name_original = scraped_bookings_map[key]
@@ -501,10 +513,10 @@ def sync_live_bookings(username, scraped_bookings):
             database.add_live_booking(username, class_name_original, class_date, class_time, instructor)
             logging.info(f"Added live booking for {username}: {class_name_original} on {class_date} at {class_time} to database.")
 
-    # 5. Delete old bookings
+    # 6. Delete old bookings
     for key in bookings_to_delete:
         class_name_lower, class_date, class_time = key
-        class_name_original = db_bookings_map[key]
+        class_name_original = db_bookings_map[key]['name']
         database.delete_live_booking(username, class_name_original, class_date, class_time)
         logging.info(f"Deleted stale live booking for {username}: {class_name_original} on {class_date} at {class_time} from database.")
 
