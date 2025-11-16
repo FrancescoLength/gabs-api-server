@@ -168,6 +168,29 @@ def lock_auto_booking(booking_id):
     finally:
         conn.close()
 
+def get_all_auto_bookings():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent FROM auto_bookings")
+    bookings = []
+    for row in cursor.fetchall():
+        bookings.append({
+            "id": row[0],
+            "username": row[1],
+            "class_name": row[2],
+            "target_time": row[3],
+            "status": row[4],
+            "created_at": row[5],
+            "last_attempt_at": row[6],
+            "retry_count": row[7],
+            "day_of_week": row[8],
+            "instructor": row[9],
+            "last_booked_date": row[10],
+            "notification_sent": row[11]
+        })
+    conn.close()
+    return bookings
+
 # Live booking functions
 def add_live_booking(username, class_name, class_date, class_time, instructor=None, auto_booking_id=None):
     conn = sqlite3.connect(DATABASE_FILE)
@@ -229,6 +252,26 @@ def update_live_booking_name(booking_id, new_name):
     conn.commit()
     conn.close()
 
+def get_all_live_bookings():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, class_name, class_date, class_time, instructor, reminder_sent, created_at, auto_booking_id FROM live_bookings")
+    bookings = []
+    for row in cursor.fetchall():
+        bookings.append({
+            "id": row[0],
+            "username": row[1],
+            "class_name": row[2],
+            "class_date": row[3],
+            "class_time": row[4],
+            "instructor": row[5],
+            "reminder_sent": row[6],
+            "created_at": row[7],
+            "auto_booking_id": row[8]
+        })
+    conn.close()
+    return bookings
+
 # Push subscription functions
 def save_push_subscription(username, subscription_info):
     conn = sqlite3.connect(DATABASE_FILE)
@@ -255,6 +298,14 @@ def delete_push_subscription(endpoint):
     deleted_rows = cursor.rowcount
     conn.close()
     return deleted_rows > 0
+
+def get_all_push_subscriptions():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, subscription_info FROM push_subscriptions")
+    subscriptions = [{'username': row[0], 'subscription_info': json.loads(row[1])} for row in cursor.fetchall()]
+    conn.close()
+    return subscriptions
 
 # Session functions
 def save_session(username, encrypted_password, session_data):
