@@ -688,12 +688,6 @@ def get_all_push_subscriptions():
     subscriptions = database.get_all_push_subscriptions()
     return jsonify(subscriptions)
 
-@app.route('/api/admin/users', methods=['GET'])
-@admin_required
-def get_all_users():
-    users = database.get_all_users()
-    return jsonify(users)
-
 @app.route('/api/admin/sessions', methods=['GET'])
 @admin_required
 def get_all_sessions():

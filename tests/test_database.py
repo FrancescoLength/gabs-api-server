@@ -145,17 +145,6 @@ def test_delete_session(memory_db):
     assert loaded_password is None
     assert loaded_session_data is None
 
-def test_get_all_users(memory_db):
-    database.save_session("user1", "pass1", {})
-    database.save_session("user2", "pass2", {})
-    database.save_session("user1", "pass1_updated", {}) # Test uniqueness
-
-    users = database.get_all_users()
-
-    assert len(users) == 2
-    assert "user1" in users
-    assert "user2" in users
-
 def test_get_all_sessions(memory_db):
     database.save_session("user1", "pass1", {"c": 1})
     database.save_session("user2", "pass2", {"c": 2})

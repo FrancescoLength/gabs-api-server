@@ -314,18 +314,14 @@ def delete_push_subscription(endpoint):
 def get_all_push_subscriptions():
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT username, endpoint, p256dh, auth FROM push_subscriptions")
+    cursor.execute("SELECT id, username, endpoint, created_at FROM push_subscriptions")
     subscriptions = []
     for row in cursor.fetchall():
         subscriptions.append({
-            "username": row[0],
-            "subscription_info": {
-                "endpoint": row[1],
-                "keys": {
-                    "p256dh": row[2],
-                    "auth": row[3]
-                }
-            }
+            "id": row[0],
+            "username": row[1],
+            "endpoint": row[2],
+            "created_at": row[3]
         })
     conn.close()
     return subscriptions
@@ -359,18 +355,10 @@ def delete_session(username):
     conn.close()
     return deleted_rows > 0
 
-def get_all_users():
-    conn = sqlite3.connect(DATABASE_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT username FROM sessions")
-    users = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return users
-
 def get_all_sessions():
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT username, encrypted_password, session_data FROM sessions")
-    sessions = [{'username': row[0], 'encrypted_password': row[1], 'session_data': json.loads(row[2])} for row in cursor.fetchall()]
+    cursor.execute("SELECT username, encrypted_password, session_data, updated_at FROM sessions")
+    sessions = [{'username': row[0], 'encrypted_password': row[1], 'session_data': json.loads(row[2]), 'updated_at': row[3]} for row in cursor.fetchall()]
     conn.close()
     return sessions
