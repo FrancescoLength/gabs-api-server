@@ -369,7 +369,7 @@ class Scraper:
                 raise SessionExpiredError(f"The {action_description} failed, possibly due to a stale session.")
 
             logging.info(f"SUCCESS! The {action_description} appears to have been successful.")
-            return {"status": "success", "action": action_description, "details": response.json()}
+            return {"status": "success", "action": action_description, "details": response.json(), "class_name": found_class_title}
         else:
             if target_time and class_name:
                  return {"status": "error", "message": f"Could not find a suitable match for '{class_name}' at {target_time}. Best match score was {highest_score}. Closest match found: '{found_class_title}'.", "html_content": classes_html}

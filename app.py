@@ -185,8 +185,12 @@ def process_auto_bookings():
                     
                     result_message = result.get('message', '').lower()
                     if result.get('status') == 'success' or (result.get('status') == 'info' and ("already registered" in result_message or "waiting list" in result_message or "already booked" in result_message)):
+                        
+                        # Use the class name from the scraper result if available, otherwise use the original class name
+                        booked_class_name = result.get('class_name', class_name)
+
                         database.update_auto_booking_status(booking_id, 'pending', last_booked_date=current_target_date, last_attempt_at=int(datetime.now().timestamp()), retry_count=0)
-                        database.add_live_booking(username, class_name, current_target_date, target_time, instructor, booking_id)
+                        database.add_live_booking(username, booked_class_name, current_target_date, target_time, instructor, booking_id)
                         logging.info(f"Successfully processed booking for auto-booking {booking_id}. Status: {result.get('message')}")
                     else:
                         if 'Could not find a suitable match' in result.get('message', ''):
@@ -451,12 +455,16 @@ def sync_live_bookings(username, scraped_bookings):
     # 1. Get all current live bookings for the user from the database
     db_bookings_raw = database.get_live_bookings_for_user(username)
     db_bookings = set()
+    db_bookings_map = {}  # Map to store original case
     for b in db_bookings_raw:
-        # Create a unique tuple for each booking
-        db_bookings.add((b[2], b[3], b[4])) # class_name, class_date, class_time
+        # Create a unique tuple for each booking in lowercase
+        key = (b[2].lower(), b[3], b[4]) # class_name, class_date, class_time
+        db_bookings.add(key)
+        db_bookings_map[key] = b[2] # Store original class name
 
     # 2. Get all scraped bookings
     scraped_bookings_set = set()
+    scraped_bookings_map = {} # Map to store original case
     for booking in scraped_bookings:
         class_name = booking.get('name')
         class_date_raw = booking.get('date')
@@ -469,7 +477,9 @@ def sync_live_bookings(username, scraped_bookings):
                 current_year = datetime.now().year
                 parsed_date = datetime.strptime(f"{date_part} {current_year}", "%d %B %Y")
                 class_date = parsed_date.strftime("%Y-%m-%d")
-                scraped_bookings_set.add((class_name, class_date, class_time))
+                key = (class_name.lower(), class_date, class_time)
+                scraped_bookings_set.add(key)
+                scraped_bookings_map[key] = class_name # Store original class name
             except Exception as e:
                 logging.error(f"Error parsing date '{class_date_raw}' during sync: {e}")
                 continue
@@ -479,19 +489,24 @@ def sync_live_bookings(username, scraped_bookings):
     bookings_to_delete = db_bookings - scraped_bookings_set
 
     # 4. Add new bookings
-    for class_name, class_date, class_time in bookings_to_add:
+    for key in bookings_to_add:
+        class_name_lower, class_date, class_time = key
+        class_name_original = scraped_bookings_map[key]
+        
         # Find the full booking details from the original scraped list
-        full_booking = next((b for b in scraped_bookings if b.get('name') == class_name and b.get('time') == class_time), None)
+        full_booking = next((b for b in scraped_bookings if b.get('name', '').lower() == class_name_lower and b.get('time') == class_time), None)
         instructor = full_booking.get('instructor') if full_booking else None
         
-        if not database.live_booking_exists(username, class_name, class_date, class_time):
-            database.add_live_booking(username, class_name, class_date, class_time, instructor)
-            logging.info(f"Added live booking for {username}: {class_name} on {class_date} at {class_time} to database.")
+        if not database.live_booking_exists(username, class_name_original, class_date, class_time):
+            database.add_live_booking(username, class_name_original, class_date, class_time, instructor)
+            logging.info(f"Added live booking for {username}: {class_name_original} on {class_date} at {class_time} to database.")
 
     # 5. Delete old bookings
-    for class_name, class_date, class_time in bookings_to_delete:
-        database.delete_live_booking(username, class_name, class_date, class_time)
-        logging.info(f"Deleted stale live booking for {username}: {class_name} on {class_date} at {class_time} from database.")
+    for key in bookings_to_delete:
+        class_name_lower, class_date, class_time = key
+        class_name_original = db_bookings_map[key]
+        database.delete_live_booking(username, class_name_original, class_date, class_time)
+        logging.info(f"Deleted stale live booking for {username}: {class_name_original} on {class_date} at {class_time} from database.")
 
 
 @app.route('/api/static_classes', methods=['GET'])
@@ -524,10 +539,10 @@ def schedule_auto_book():
             current_user, class_name, target_time_str, day_of_week, instructor
         )
         logging.info(f"Recurring auto-booking scheduled for user {current_user}: Class {class_name} on {day_of_week} at {target_time_str}. Booking ID: {booking_id}")
-        return jsonify({"message": "Recurring auto-booking scheduled successfully", "booking_id": booking_id}), 201
+        return jsonify({"message": "Recurring auto-booking scheduled successfully!", "booking_id": booking_id}), 201
     except Exception as e:
         logging.error(f"Error scheduling auto-booking for user {current_user}: {e}")
-        return jsonify({"error": "An internal server error occurred."} ), 500
+        return jsonify({"error": "An internal server error occurred. Contact Administrator."} ), 500
 
 @app.route('/api/auto_bookings', methods=['GET'])
 @jwt_required()
@@ -568,9 +583,9 @@ def cancel_auto_book():
     try:
         if database.cancel_auto_booking(booking_id, current_user):
             logging.info(f"Auto-booking ID {booking_id} cancelled by user {current_user}.")
-            return jsonify({"message": f"Auto-booking ID {booking_id} cancelled successfully."} ), 200
+            return jsonify({"message": f"Recurring auto-booking cancelled successfully!"} ), 200
         else:
-            return jsonify({"error": "Booking not found or not authorized to cancel."} ), 404
+            return jsonify({"error": "Booking not found or not authorized to cancel. Contact Administrator"} ), 404
     except Exception as e:
         logging.error(f"Error cancelling auto-booking ID {booking_id} for user {current_user}: {e}")
         return jsonify({"error": "An internal server error occurred."} ), 500
