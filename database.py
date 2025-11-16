@@ -22,7 +22,6 @@ def init_db():
             last_attempt_at INTEGER,
             day_of_week TEXT,
             instructor TEXT,
-            notification_sent INTEGER DEFAULT 0,
             retry_count INTEGER DEFAULT 0
         )
     ''')
@@ -143,7 +142,7 @@ def get_failed_auto_bookings():
 def get_auto_booking_by_id(booking_id):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM auto_bookings WHERE id = ?", (booking_id,))
+    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date FROM auto_bookings WHERE id = ?", (booking_id,))
     booking = cursor.fetchone()
     conn.close()
     return booking
@@ -171,7 +170,7 @@ def lock_auto_booking(booking_id):
 def get_all_auto_bookings():
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent FROM auto_bookings")
+    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date FROM auto_bookings")
     bookings = []
     for row in cursor.fetchall():
         bookings.append({
@@ -185,8 +184,7 @@ def get_all_auto_bookings():
             "retry_count": row[7],
             "day_of_week": row[8],
             "instructor": row[9],
-            "last_booked_date": row[10],
-            "notification_sent": row[11]
+            "last_booked_date": row[10]
         })
     conn.close()
     return bookings

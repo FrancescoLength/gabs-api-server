@@ -152,7 +152,7 @@ def process_auto_bookings():
                     logging.warning(f"Could not refetch booking {booking_id} or status was not 'in_progress' after locking. Skipping.")
                     continue
 
-                booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date, notification_sent = booking
+                booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date = booking
 
                 today = datetime.now()
                 days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
@@ -672,8 +672,7 @@ def get_all_auto_bookings():
             "retry_count": b[7],
             "day_of_week": b[8],
             "instructor": b[9],
-            "last_booked_date": b[10],
-            "notification_sent": b[11]
+            "last_booked_date": b[10]
         })
     return jsonify(bookings_formatted)
 
