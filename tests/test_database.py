@@ -30,8 +30,8 @@ def test_add_auto_booking(memory_db):
 def test_get_pending_auto_bookings(memory_db):
     database.add_auto_booking("test_user", "Test Class", "10:00", "Monday", "Test Instructor")
     cursor = memory_db.cursor()
-    cursor.execute("INSERT INTO auto_bookings (username, class_name, target_time, status, created_at, day_of_week, instructor, notification_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                   ("test_user", "Test Class 2", "12:00", "failed", int(datetime.now().timestamp()), "Tuesday", "Test Instructor 2", 0))
+    cursor.execute("INSERT INTO auto_bookings (username, class_name, target_time, status, created_at, day_of_week, instructor) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                   ("test_user", "Test Class 2", "12:00", "failed", int(datetime.now().timestamp()), "Tuesday", "Test Instructor 2"))
     memory_db.commit()
 
     pending_bookings = database.get_pending_auto_bookings()
