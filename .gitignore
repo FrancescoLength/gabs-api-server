@@ -15,3 +15,4 @@ encryption.key
 *.json
 auto_bookings.db
 gabs_api.log
+.coverage

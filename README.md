@@ -32,6 +32,7 @@ The application is designed with a decoupled architecture to ensure stability an
 -   **`scheduler_runner.py`**: A standalone, dedicated process that runs the APScheduler for all background tasks. It uses a thread pool to execute jobs concurrently, which is critical for handling multiple auto-booking requests for the same class without delays.
 -   **`logging_config.py`**: A centralized module that provides a consistent logging format for both the web server and the scheduler processes.
 -   **`scraper.py`**: A robust web scraping client that handles all interactions with the gym's website, including advanced headers to mimic a real browser and prevent blocking.
+-   **`static_timetable.json`**: Stores a static version of the gym's timetable, used as a fallback or for quick lookups.
 -   **Proactive Session Refresh:** A dedicated scheduler job (`refresh_sessions`) runs periodically (every 2 hours) to ensure all active user sessions with the gym's website remain valid. This minimizes the risk of session expiration during critical booking windows.
 -   **Asynchronous & Non-Blocking Booking Logic**: The core auto-booking process has been heavily optimized for speed and reliability. The previous "pre-warming" step has been removed in favor of the proactive session refresh. Furthermore, I/O-intensive operations like writing debug HTML files upon failure are now handled by a dedicated, non-blocking background thread. This ensures that the main booking process is never delayed by slow disk operations, maximizing the chances of successfully booking a spot in a competitive, time-sensitive environment.
 
@@ -138,13 +139,15 @@ After=network.target
 [Service]
 User=gabs-admin
 Group=gabs-admin
-ExecStart=/usr/local/bin/ngrok http 5000
+ExecStart=/usr/local/bin/ngrok start --all --config /home/gabs-admin/.config/ngrok/ngrok.yml
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 ```
 *(Note: Ensure the `User`, `Group`, and paths in `WorkingDirectory` and `ExecStart` match your specific setup.)*
+
+**Deprecation Note:** Previously, `crontab` and `screen` sessions were used for managing background processes. This approach has been deprecated in favor of `systemd` services for improved reliability, automatic restarts, and centralized logging.
 
 **2. Enable and Start the Services:**
 
@@ -188,6 +191,29 @@ The test suite currently includes over 40 tests, providing good coverage of the 
     -   `tests/test_database.py`: Tests the database operations in `database.py` using an in-memory SQLite database to ensure test isolation.
 -   **Integration Tests:**
     -   `tests/test_app.py`: Tests the Flask application's API endpoints, including authentication, protected routes, and the core booking and scheduling functionality.
+
+### Test Coverage Report
+
+Overall test coverage: **63%**
+
+| File                            | Statements | Miss | Cover |
+| :------------------------------ | :--------- | :--- | :---- |
+| `app.py`                        | 489        | 245  | 50%   |
+| `config.py`                     | 18         | 2    | 89%   |
+| `crypto.py`                     | 13         | 8    | 38%   |
+| `database.py`                   | 236        | 29   | 88%   |
+| `generate_encryption_key.py`    | 8          | 8    | 0%    |
+| `generate_vapid_keys_manual.py` | 15         | 15   | 0%    |
+| `logging_config.py`             | 25         | 2    | 92%   |
+| `scheduler_runner.py`           | 28         | 28   | 0%    |
+| `scraper.py`                    | 330        | 212  | 36%   |
+| `tests/conftest.py`             | 24         | 0    | 100%  |
+| `tests/test_app.py`             | 32         | 0    | 100%  |
+| `tests/test_app_integration.py` | 33         | 0    | 100%  |
+| `tests/test_database.py`        | 174        | 3    | 98%   |
+| `tests/test_scheduler_jobs.py`  | 49         | 0    | 100%  |
+| `tests/test_scraper.py`         | 33         | 0    | 100%  |
+| **TOTAL**                       | **1507**   | **552**| **63%** |
 
 ### Running the Tests
 
@@ -289,7 +315,7 @@ Gets a list of the authenticated user's current bookings and waiting list entrie
 
 ### **Auto-Booking Functionality**
 
-This API supports scheduling recurring automatic bookings for gym classes.
+This API supports scheduling recurring automatic bookings for gym classes. All auto-booking configurations are stored in the `auto_bookings.db` SQLite database.
 
 #### `POST /api/schedule_auto_book`
 
@@ -398,7 +424,7 @@ Retrieves a list of all active push subscriptions across all users.
 
 -   **Example `curl` Request:**
     ```bash
-    curl -H "Authorization: Bearer <admin_token>" http://127.0.0.1:5000/api/admin/push/subscriptions
+    curl -H "Authorization: Bearer <admin_token>" http://127.0.0.1:5000/api/admin/push_subscriptions
     ```
 
 #### `GET /api/admin/status`
