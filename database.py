@@ -59,7 +59,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sessions (
             username TEXT PRIMARY KEY,
             encrypted_password TEXT NOT NULL,
-            session_data TEXT NOT NULL
+            session_data TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
         )
     ''')
 
@@ -333,8 +334,9 @@ def get_all_push_subscriptions():
 def save_session(username, encrypted_password, session_data):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO sessions (username, encrypted_password, session_data) VALUES (?, ?, ?)",
-                   (username, encrypted_password, json.dumps(session_data)))
+    updated_at = int(datetime.now().timestamp())
+    cursor.execute("INSERT OR REPLACE INTO sessions (username, encrypted_password, session_data, updated_at) VALUES (?, ?, ?, ?)",
+                   (username, encrypted_password, json.dumps(session_data), updated_at))
     conn.commit()
     conn.close()
 
