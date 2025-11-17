@@ -1,9 +1,10 @@
+import os
 import sqlite3
 import json
 from datetime import datetime
 import logging
 
-DATABASE_FILE = 'auto_bookings.db'
+DATABASE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'auto_bookings.db')
 
 def init_db():
     conn = sqlite3.connect(DATABASE_FILE)
