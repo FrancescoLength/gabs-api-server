@@ -362,3 +362,12 @@ def get_all_sessions():
     sessions = [{'username': row[0], 'encrypted_password': row[1], 'session_data': json.loads(row[2]), 'updated_at': row[3]} for row in cursor.fetchall()]
     conn.close()
     return sessions
+
+def get_all_users():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT username FROM sessions")
+    users = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return users
+

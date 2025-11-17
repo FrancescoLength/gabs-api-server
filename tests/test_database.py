@@ -155,6 +155,18 @@ def test_get_all_sessions(memory_db):
     assert sessions[0]['username'] == 'user1'
     assert sessions[1]['username'] == 'user2'
 
+def test_get_all_users(memory_db):
+    database.save_session("user1", "pass1", {"c": 1})
+    database.save_session("user2", "pass2", {"c": 2})
+    database.save_session("user1", "pass1_updated", {"c": 1}) # Update existing user
+
+    users = database.get_all_users()
+
+    assert len(users) == 2
+    assert "user1" in users
+    assert "user2" in users
+
+
 def test_add_and_get_live_booking(memory_db):
     username = "test_user"
     class_name = "Test Live Class"
