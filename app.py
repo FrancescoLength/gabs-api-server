@@ -318,6 +318,7 @@ def refresh_sessions():
                 if scraper:
                     # Perform a lightweight, safe operation to check session validity
                     bookings = scraper.get_my_bookings()
+                    database.touch_session(username) # Session is valid, so we touch the timestamp
                     sync_live_bookings(username, bookings)
                     logging.debug(f"Session for {username} is valid and bookings synced.")
                 else:
@@ -446,6 +447,7 @@ def cancel_booking(user_scraper):
 def get_my_bookings(user_scraper):
     bookings = user_scraper.get_my_bookings()
     sync_live_bookings(user_scraper.username, bookings)
+    database.touch_session(user_scraper.username) # Session is valid, so we touch the timestamp
     return jsonify(bookings)
 
 def sync_live_bookings(username, scraped_bookings):

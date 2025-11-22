@@ -337,6 +337,14 @@ def save_session(username, encrypted_password, session_data):
     conn.commit()
     conn.close()
 
+def touch_session(username):
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    updated_at = int(datetime.now().timestamp())
+    cursor.execute("UPDATE sessions SET updated_at = ? WHERE username = ?", (updated_at, username))
+    conn.commit()
+    conn.close()
+
 def load_session(username):
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
