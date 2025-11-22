@@ -172,7 +172,8 @@ class Scraper:
             target_date_str = target_date.strftime("%Y-%m-%d")
             logging.info(f"Fetching classes for date: {target_date_str}...")
             
-            classes_html = self._get_classes_for_single_date(target_date_str)
+            classes_json_response = self._get_classes_for_single_date(target_date_str)
+            classes_html = classes_json_response.get('@events')
             if classes_html:
                 parsed_classes = self._parse_classes_from_html(classes_html, target_date)
                 all_classes.extend(parsed_classes)
@@ -186,9 +187,11 @@ class Scraper:
         else:
             logging.info(f"Attempting to book '{class_name}' on {target_date_str}")
         
-        classes_html = self._get_classes_for_single_date(target_date_str)
+        json_response = self._get_classes_for_single_date(target_date_str)
+        classes_html = json_response.get('@events')
+
         if not classes_html:
-            return {"error": "Could not retrieve class list for the specified date."}
+            return {"status": "error", "message": "Could not retrieve class list HTML for the specified date.", "html_content": json.dumps(json_response, indent=2)}
         
         return self._parse_and_execute_booking(classes_html, class_name, target_time, instructor, target_date_str)
 
@@ -218,7 +221,7 @@ class Scraper:
         if json_response.get("X_OCTOBER_REDIRECT"):
             raise SessionExpiredError("Redirect received, indicating session has expired.")
 
-        return json_response.get('@events')
+        return json_response
 
     def _parse_classes_from_html(self, classes_html, target_date):
         """Helper method to parse class details from HTML."""
@@ -380,7 +383,8 @@ class Scraper:
     def find_and_cancel_booking(self, class_name, target_date_str, target_time, instructor_name=""):
         """Finds a specific class on a given date and cancels the booking."""
         logging.info(f"Attempting to cancel '{class_name}' at {target_time} on {target_date_str}")
-        classes_html = self._get_classes_for_single_date(target_date_str)
+        json_response = self._get_classes_for_single_date(target_date_str)
+        classes_html = json_response.get('@events')
         if not classes_html:
             return {"error": "Could not retrieve class list for the specified date."}
         
@@ -518,7 +522,8 @@ class Scraper:
     def get_class_availability(self, class_name, target_date_str):
         """Gets the availability for a specific class on a given date."""
         logging.info(f"Checking availability for '{class_name}' on {target_date_str}")
-        classes_html = self._get_classes_for_single_date(target_date_str)
+        json_response = self._get_classes_for_single_date(target_date_str)
+        classes_html = json_response.get('@events')
         if not classes_html:
             return {"error": "Could not retrieve class list for the specified date."}
 
