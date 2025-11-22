@@ -7,6 +7,7 @@ import re
 from thefuzz import fuzz
 import random
 import time
+import json
 
 # --- Custom Exceptions ---
 class SessionExpiredError(Exception):
