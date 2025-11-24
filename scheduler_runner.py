@@ -19,7 +19,7 @@ if __name__ == '__main__':
     logger.info("Starting standalone scheduler process...")
 
     jobstores = {
-        'default': SQLAlchemyJobStore(url=f'sqlite:///{database.DATABASE_FILE}')
+        'default': SQLAlchemyJobStore(url=f'sqlite:///{database.DATABASE_FILE}?timeout=15')
     }
     
     # Using a ThreadPoolExecutor to handle concurrent jobs.
