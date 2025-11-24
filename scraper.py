@@ -298,6 +298,11 @@ class Scraper:
             title_tag = gym_class.find('h2', {'class': 'title'})
             title = title_tag.text.strip() if title_tag else ""
 
+            # Explicitly skip virtual classes
+            if 'virtual' in title.lower():
+                logging.info(f"Skipping virtual class: '{title}'")
+                continue
+
             instructor_from_html = ""
             p_tags = gym_class.find_all('p')
             for p in p_tags:
@@ -307,7 +312,7 @@ class Scraper:
 
             # Match by time, then fuzzy match name and instructor
             if start_time_str == target_time:
-                name_score = fuzz.ratio(class_name.lower(), title.lower())
+                name_score = fuzz.partial_ratio(class_name.lower(), title.lower())
                 
                 if target_instructor:
                     instructor_score = fuzz.ratio(target_instructor.lower(), instructor_from_html.lower())
@@ -326,7 +331,7 @@ class Scraper:
             title_tag = best_match_element.find('h2', {'class': 'title'})
             found_class_title = title_tag.text.strip() if title_tag else "Unknown"
 
-        if best_match_element and highest_score > 46:
+        if best_match_element and highest_score > 90:
             title = found_class_title # Use the extracted title
             logging.info(f"Found best match for '{class_name}': '{title}' with score {highest_score}")
 
