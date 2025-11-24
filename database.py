@@ -17,13 +17,14 @@ def init_db():
             username TEXT NOT NULL,
             class_name TEXT NOT NULL,
             target_time TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
+            status TEXT NOT NULL,
             created_at INTEGER NOT NULL,
-            last_booked_date TEXT,
             last_attempt_at INTEGER,
-            day_of_week TEXT,
+            retry_count INTEGER DEFAULT 0,
+            day_of_week TEXT NOT NULL,
             instructor TEXT,
-            retry_count INTEGER DEFAULT 0
+            last_booked_date TEXT,
+            notification_sent INTEGER DEFAULT 0
         )
     ''')
     
