@@ -283,6 +283,9 @@ def send_cancellation_reminders():
                             if "410" in str(e): # GONE status, subscription is no longer valid
                                 database.delete_push_subscription(sub['endpoint'])
                                 logging.info(f"Deleted invalid push subscription for user {username}: {sub['endpoint']}")
+                else:
+                    logging.info(f"No push subscriptions found for {username} for live booking ID {booking_id}. Marking reminder as sent.")
+                    database.update_live_booking_reminder_status(booking_id, reminder_sent=1)
 
             else:
                 logging.debug(f"Live booking ID {booking_id} for {username} not within cancellation reminder window. Time until class: {time_until_class}")
