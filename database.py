@@ -6,9 +6,19 @@ import logging
 
 DATABASE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'auto_bookings.db')
 
+def get_db_connection(timeout=30):
+    """Establishes a database connection with a default timeout."""
+    conn = sqlite3.connect(DATABASE_FILE, timeout=timeout)
+    # Optional: If you want to fetch rows as dictionaries
+    # conn.row_factory = sqlite3.Row
+    return conn
+
 def init_db():
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # Enable Write-Ahead Logging (WAL) for better concurrency
+    cursor.execute('PRAGMA journal_mode=WAL;')
     
     # Auto-booking table
     cursor.execute('''
@@ -71,7 +81,7 @@ def init_db():
 
 # Auto-booking functions
 def add_auto_booking(username, class_name, target_time, day_of_week, instructor):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     created_at = int(datetime.now().timestamp())
     cursor.execute("INSERT INTO auto_bookings (username, class_name, target_time, status, created_at, day_of_week, instructor) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -82,7 +92,7 @@ def add_auto_booking(username, class_name, target_time, day_of_week, instructor)
     return booking_id
 
 def get_pending_auto_bookings():
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM auto_bookings WHERE status = 'pending'")
     bookings = cursor.fetchall()
@@ -90,7 +100,7 @@ def get_pending_auto_bookings():
     return bookings
 
 def update_auto_booking_status(booking_id, status=None, last_booked_date=None, last_attempt_at=None, retry_count=None):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     updates = []
@@ -120,7 +130,7 @@ def update_auto_booking_status(booking_id, status=None, last_booked_date=None, l
     conn.close()
 
 def get_auto_bookings_for_user(username):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM auto_bookings WHERE username = ?", (username,))
     bookings = cursor.fetchall()
@@ -128,7 +138,7 @@ def get_auto_bookings_for_user(username):
     return bookings
 
 def cancel_auto_booking(booking_id, username):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM auto_bookings WHERE id = ? AND username = ?", (booking_id, username))
     conn.commit()
@@ -137,7 +147,7 @@ def cancel_auto_booking(booking_id, username):
     return deleted_rows > 0
 
 def get_failed_auto_bookings():
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, last_attempt_at FROM auto_bookings WHERE status = 'failed'")
     bookings = cursor.fetchall()
@@ -145,7 +155,7 @@ def get_failed_auto_bookings():
     return bookings
 
 def get_auto_booking_by_id(booking_id):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date FROM auto_bookings WHERE id = ?", (booking_id,))
     booking = cursor.fetchone()
@@ -153,7 +163,7 @@ def get_auto_booking_by_id(booking_id):
     return booking
 
 def lock_auto_booking(booking_id):
-    conn = sqlite3.connect(DATABASE_FILE, timeout=10)
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute("BEGIN EXCLUSIVE")
@@ -173,7 +183,7 @@ def lock_auto_booking(booking_id):
         conn.close()
 
 def get_all_auto_bookings():
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date FROM auto_bookings")
     bookings = []
@@ -196,7 +206,7 @@ def get_all_auto_bookings():
 
 # Live booking functions
 def add_live_booking(username, class_name, class_date, class_time, instructor=None, auto_booking_id=None):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     created_at = datetime.now().strftime('%d/%m/%y %H:%M:%S')
     cursor.execute("INSERT INTO live_bookings (username, class_name, class_date, class_time, instructor, reminder_sent, created_at, auto_booking_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -207,7 +217,7 @@ def add_live_booking(username, class_name, class_date, class_time, instructor=No
     return booking_id
 
 def get_live_bookings_for_user(username):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM live_bookings WHERE username = ?", (username,))
     bookings = cursor.fetchall()
@@ -215,7 +225,7 @@ def get_live_bookings_for_user(username):
     return bookings
 
 def live_booking_exists(username, class_name, class_date, class_time):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT 1 FROM live_bookings WHERE username = ? AND class_name = ? AND class_date = ? AND class_time = ?",
                    (username, class_name, class_date, class_time))
@@ -224,7 +234,7 @@ def live_booking_exists(username, class_name, class_date, class_time):
     return exists
 
 def delete_live_booking(username, class_name, class_date, class_time):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM live_bookings WHERE username = ? AND class_name = ? AND class_date = ? AND class_time = ?",
                    (username, class_name, class_date, class_time))
@@ -234,7 +244,7 @@ def delete_live_booking(username, class_name, class_date, class_time):
     return deleted_rows > 0
 
 def get_live_bookings_for_reminder():
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, class_name, class_date, class_time, instructor FROM live_bookings WHERE reminder_sent = 0")
     bookings = cursor.fetchall()
@@ -242,21 +252,21 @@ def get_live_bookings_for_reminder():
     return bookings
 
 def update_live_booking_reminder_status(booking_id, reminder_sent):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE live_bookings SET reminder_sent = ? WHERE id = ?", (reminder_sent, booking_id))
     conn.commit()
     conn.close()
 
 def update_live_booking_name(booking_id, new_name):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE live_bookings SET class_name = ? WHERE id = ?", (new_name, booking_id))
     conn.commit()
     conn.close()
 
 def get_all_live_bookings():
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, class_name, class_date, class_time, instructor, reminder_sent, created_at, auto_booking_id FROM live_bookings")
     bookings = []
@@ -277,7 +287,7 @@ def get_all_live_bookings():
 
 # Push subscription functions
 def save_push_subscription(username, subscription_info):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     endpoint = subscription_info.get('endpoint')
     p256dh = subscription_info.get('keys', {}).get('p256dh')
@@ -289,7 +299,7 @@ def save_push_subscription(username, subscription_info):
     conn.close()
 
 def get_push_subscriptions_for_user(username):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE username = ?", (username,))
     subscriptions = []
@@ -305,7 +315,7 @@ def get_push_subscriptions_for_user(username):
     return subscriptions
 
 def delete_push_subscription(endpoint):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
     conn.commit()
@@ -314,7 +324,7 @@ def delete_push_subscription(endpoint):
     return deleted_rows > 0
 
 def get_all_push_subscriptions():
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, endpoint, created_at FROM push_subscriptions")
     subscriptions = []
@@ -330,7 +340,7 @@ def get_all_push_subscriptions():
 
 # Session functions
 def save_session(username, encrypted_password, session_data):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     updated_at = int(datetime.now().timestamp())
     cursor.execute("INSERT OR REPLACE INTO sessions (username, encrypted_password, session_data, updated_at) VALUES (?, ?, ?, ?)",
@@ -339,7 +349,7 @@ def save_session(username, encrypted_password, session_data):
     conn.close()
 
 def touch_session(username):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     updated_at = int(datetime.now().timestamp())
     cursor.execute("UPDATE sessions SET updated_at = ? WHERE username = ?", (updated_at, username))
@@ -347,7 +357,7 @@ def touch_session(username):
     conn.close()
 
 def load_session(username):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT encrypted_password, session_data FROM sessions WHERE username = ?", (username,))
     row = cursor.fetchone()
@@ -357,7 +367,7 @@ def load_session(username):
     return None, None
 
 def delete_session(username):
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM sessions WHERE username = ?", (username,))
     conn.commit()
@@ -366,7 +376,7 @@ def delete_session(username):
     return deleted_rows > 0
 
 def get_all_sessions():
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT username, encrypted_password, session_data, updated_at FROM sessions")
     sessions = [{'username': row[0], 'encrypted_password': row[1], 'session_data': json.loads(row[2]), 'updated_at': row[3]} for row in cursor.fetchall()]
@@ -374,10 +384,9 @@ def get_all_sessions():
     return sessions
 
 def get_all_users():
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT username FROM sessions")
     users = [row[0] for row in cursor.fetchall()]
     conn.close()
     return users
-
