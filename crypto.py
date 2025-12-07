@@ -1,5 +1,5 @@
 from cryptography.fernet import Fernet
-import config
+from . import config
 
 # Initialize Fernet with the key from config
 # This will raise an error if the key is not set, which is a good thing.

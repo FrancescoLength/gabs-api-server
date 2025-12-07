@@ -1,5 +1,5 @@
 import requests
-import config
+from . import config
 from bs4 import BeautifulSoup
 import logging
 from datetime import date, timedelta, datetime
@@ -8,6 +8,8 @@ from thefuzz import fuzz
 import random
 import time
 import json
+from functools import wraps
+from typing import List, Dict, Any, Optional, Union, Callable
 
 # --- Custom Exceptions ---
 class SessionExpiredError(Exception):
@@ -15,7 +17,7 @@ class SessionExpiredError(Exception):
     pass
 
 # --- Constants ---
-BASE_URL = config.WEBSITE_URL
+BASE_URL = config.WEBSITE_URL or "" # Type safety
 LOGIN_URL = BASE_URL + 'login'
 MEMBERS_URL = BASE_URL + 'members'
 BOOKING_URL = BASE_URL + 'book-classes'
@@ -44,11 +46,9 @@ USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.2478.67',
 ]
 
-from functools import wraps
-
-def handle_session_expiry(func):
+def handle_session_expiry(func: Callable) -> Callable:
     @wraps(func)
-    def wrapper(self, *args, **kwargs):
+    def wrapper(self: 'Scraper', *args: Any, **kwargs: Any) -> Any:
         try:
             return func(self, *args, **kwargs)
         except SessionExpiredError as e:
@@ -61,13 +61,13 @@ def handle_session_expiry(func):
     return wrapper
 
 class Scraper:
-    def __init__(self, username, password, session_data=None):
+    def __init__(self, username: str, password: str, session_data: Optional[Dict[str, Any]] = None):
         self.username = username
         self.password = password
         self.session = requests.Session()
-        self.csrf_token = None
+        self.csrf_token: Optional[str] = None
         self.relogin_failures = 0
-        self.disabled_until = None
+        self.disabled_until: Optional[datetime] = None
         self.user_agent = random.choice(USER_AGENTS)
         self.base_headers = {
             'User-Agent': self.user_agent,
@@ -90,19 +90,19 @@ class Scraper:
             if not self._login():
                 raise Exception("Initial login failed.")
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         """Serializes the session cookies and CSRF token to a dictionary."""
         return {
             'cookies': self.session.cookies.get_dict(),
             'csrf_token': self.csrf_token
         }
 
-    def from_dict(self, data):
+    def from_dict(self, data: Dict[str, Any]) -> None:
         """Deserializes the session from a dictionary."""
         self.session.cookies.update(data.get('cookies', {}))
         self.csrf_token = data.get('csrf_token')
 
-    def _get_csrf_token(self):
+    def _get_csrf_token(self) -> Optional[str]:
         """Fetch the CSRF token from the meta tag."""
         try:
             headers = {
@@ -114,13 +114,18 @@ class Scraper:
             response = self.session.get(LOGIN_URL, headers=headers)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
-            token = soup.find('meta', {'name': 'csrf-token'})['content']
-            return token
+            token_tag = soup.find('meta', {'name': 'csrf-token'})
+            if token_tag and isinstance(token_tag, dict): # Beautiful soup check
+                 token = token_tag.get('content')
+                 return str(token) if token else None
+            elif token_tag: # If it behaves like a tag object
+                 return token_tag['content'] # type: ignore
+            return None
         except (requests.exceptions.RequestException, KeyError, TypeError) as e:
             logging.error(f"Failed to retrieve CSRF token: {e}")
             return None
 
-    def _login(self):
+    def _login(self) -> bool:
         """Establish a session by logging in. Returns True on success, False on failure."""
         if self.disabled_until and datetime.now() < self.disabled_until:
             logging.warning(f"Scraper for {self.username} is temporarily disabled due to repeated login failures.")
@@ -165,7 +170,7 @@ class Scraper:
             return False
 
     @handle_session_expiry
-    def get_classes(self, days_in_advance=7):
+    def get_classes(self, days_in_advance: int = 7) -> List[Dict[str, Any]]:
         """Fetch all available classes for the next N days."""
         all_classes = []
         for i in range(days_in_advance):
@@ -181,7 +186,7 @@ class Scraper:
         return all_classes
 
     @handle_session_expiry
-    def find_and_book_class(self, target_date_str, class_name="", target_time="", instructor=""):
+    def find_and_book_class(self, target_date_str: str, class_name: str = "", target_time: str = "", instructor: str = "") -> Dict[str, Any]:
         """Finds and books a class. Can match by class name or by time/instructor."""
         if target_time and class_name:
             logging.info(f"Attempting to book class like '{class_name}' at {target_time} on {target_date_str}")
@@ -197,7 +202,7 @@ class Scraper:
         return self._parse_and_execute_booking(classes_html, class_name, target_time, instructor, target_date_str)
 
     @handle_session_expiry
-    def _get_classes_for_single_date(self, target_date_str):
+    def _get_classes_for_single_date(self, target_date_str: str) -> Dict[str, Any]:
         """Helper method to fetch class HTML for a single date."""
         time.sleep(random.uniform(1, 2))
         if self.disabled_until and datetime.now() < self.disabled_until:
@@ -224,7 +229,7 @@ class Scraper:
 
         return json_response
 
-    def _parse_classes_from_html(self, classes_html, target_date):
+    def _parse_classes_from_html(self, classes_html: str, target_date: date) -> List[Dict[str, Any]]:
         """Helper method to parse class details from HTML."""
         soup = BeautifulSoup(classes_html, 'html.parser')
         gym_classes = soup.find_all('div', {'class': 'class grid'})
@@ -235,7 +240,7 @@ class Scraper:
             start_time_span = gym_class.find('span', {'itemprop': 'startDate'})
             
             instructor = ""
-            p_tags = gym_class.find_all('p')
+            p_tags = gym_class.find_all('p') # type: ignore
             for p in p_tags:
                 if p.text.lower().strip().startswith('with '):
                     instructor = p.text.strip()[5:].replace('.','')
@@ -247,7 +252,7 @@ class Scraper:
             start_time_str = start_time_span.text.strip() if start_time_span else "N/A"
             end_time_str = end_time_span.text.strip() if end_time_span else "N/A"
 
-            duration = "N/A"
+            duration: Union[int, str] = "N/A"
             if start_time_str != "N/A" and end_time_str != "N/A":
                 try:
                     start_dt = datetime.strptime(start_time_str, '%H:%M')
@@ -278,7 +283,7 @@ class Scraper:
         return parsed_classes
 
     @handle_session_expiry
-    def _parse_and_execute_booking(self, classes_html, class_name, target_time, target_instructor, target_date_str, is_retry=False):
+    def _parse_and_execute_booking(self, classes_html: str, class_name: str, target_time: str, target_instructor: str, target_date_str: str, is_retry: bool = False) -> Dict[str, Any]:
         """Helper method that finds and books a class."""
         self.csrf_token = self._get_csrf_token() # Refresh CSRF token
         if not self.csrf_token:
@@ -304,7 +309,7 @@ class Scraper:
                 continue
 
             instructor_from_html = ""
-            p_tags = gym_class.find_all('p')
+            p_tags = gym_class.find_all('p') # type: ignore
             for p in p_tags:
                 if p.text.lower().strip().startswith('with '):
                     instructor_from_html = p.text.strip()[5:].replace('.', '')
@@ -386,7 +391,7 @@ class Scraper:
                  return {"status": "error", "message": f"Specified class '{class_name}' not found."}
 
     @handle_session_expiry
-    def find_and_cancel_booking(self, class_name, target_date_str, target_time, instructor_name=""):
+    def find_and_cancel_booking(self, class_name: str, target_date_str: str, target_time: str, instructor_name: str = "") -> Dict[str, Any]:
         """Finds a specific class on a given date and cancels the booking."""
         logging.info(f"Attempting to cancel '{class_name}' at {target_time} on {target_date_str}")
         json_response = self._get_classes_for_single_date(target_date_str)
@@ -397,7 +402,7 @@ class Scraper:
         return self._parse_and_execute_cancellation(classes_html, class_name, target_time, instructor_name, target_date_str)
 
     @handle_session_expiry
-    def _parse_and_execute_cancellation(self, classes_html, class_name, target_time, instructor_name, target_date_str, is_retry=False):
+    def _parse_and_execute_cancellation(self, classes_html: str, class_name: str, target_time: str, instructor_name: str, target_date_str: str, is_retry: bool = False) -> Dict[str, Any]:
         """Helper method that finds a class and triggers the cancellation, with auto re-login."""
         self.csrf_token = self._get_csrf_token() # Refresh CSRF token
         if not self.csrf_token:
@@ -421,7 +426,7 @@ class Scraper:
                 # If instructor is specified, it must also match
                 if instructor_name:
                     instructor_from_html = ""
-                    p_tags = gym_class.find_all('p')
+                    p_tags = gym_class.find_all('p') # type: ignore
                     for p in p_tags:
                         if p.text.lower().strip().startswith('with '):
                             instructor_from_html = p.text.strip()[5:].replace('.', '')
@@ -477,7 +482,7 @@ class Scraper:
         return {"status": "success", "action": "cancellation", "details": response.json()}
 
     @handle_session_expiry
-    def get_my_bookings(self):
+    def get_my_bookings(self) -> List[Dict[str, str]]:
         """Scrapes the members area to get a list of current bookings and waiting list entries."""
         logging.debug("Attempting to scrape members area for bookings...")
         response = self.session.get(MEMBERS_URL, headers={'User-Agent': self.user_agent})
@@ -525,7 +530,7 @@ class Scraper:
         return my_bookings
 
     @handle_session_expiry
-    def get_class_availability(self, class_name, target_date_str):
+    def get_class_availability(self, class_name: str, target_date_str: str) -> Dict[str, Union[str, int]]:
         """Gets the availability for a specific class on a given date."""
         logging.info(f"Checking availability for '{class_name}' on {target_date_str}")
         json_response = self._get_classes_for_single_date(target_date_str)

@@ -12,17 +12,20 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
 VAPID_ADMIN_EMAIL = os.getenv("VAPID_ADMIN_EMAIL")
 
-ENCRYPTION_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'encryption.key')
+ENCRYPTION_KEY: str | None = os.getenv("ENCRYPTION_KEY")
 
-try:
-    with open(ENCRYPTION_KEY_FILE, 'r') as f:
-        ENCRYPTION_KEY = f.read().strip()
-except FileNotFoundError:
-    # Fallback per retrocompatibilità o per ambienti dove il file non è ancora stato creato.
-    # In un ambiente di produzione, questo dovrebbe generare un errore critico.
-    ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
-    if not ENCRYPTION_KEY:
-        raise RuntimeError(f"Security critical error: Encryption key not found at {ENCRYPTION_KEY_FILE} and not set as environment variable.")
+if not ENCRYPTION_KEY:
+    # Fallback for legacy file support, but prioritize ENV.
+    # This path should be deprecated in future versions.
+    ENCRYPTION_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'encryption.key')
+    try:
+        with open(ENCRYPTION_KEY_FILE, 'r') as f:
+            ENCRYPTION_KEY = f.read().strip()
+    except FileNotFoundError:
+        pass
+
+if not ENCRYPTION_KEY:
+    raise RuntimeError("CRITICAL: ENCRYPTION_KEY not found in environment variables.")
 
 # Email dell'amministratore
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")

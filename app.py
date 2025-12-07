@@ -9,27 +9,33 @@ from flask_limiter.util import get_remote_address
 import logging
 from datetime import datetime, timedelta
 from functools import wraps
-from logging.handlers import RotatingFileHandler
 import queue
 import threading
+from typing import List, Optional, Tuple, Any, Dict, Union, Callable
 
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager, verify_jwt_in_request
+from flasgger import Swagger
 
-from scraper import Scraper, SessionExpiredError
-import config
-import database
-import crypto
+from .scraper import Scraper, SessionExpiredError
+from . import config
+from . import database
+from . import crypto
 from pywebpush import webpush
+
+# Import the new auto_booking_service
+from .services import auto_booking_service
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
-from logging_config import setup_logging, LOG_FILE
+from .logging_config import setup_logging, LOG_FILE
 
 # Configure logging
 setup_logging()
 
 app = Flask(__name__)
+swagger = Swagger(app)
+
 limiter = Limiter(
     get_remote_address,
     app=app,
@@ -40,7 +46,7 @@ app.start_time = datetime.now()
 
 
 # Explicitly define allowed origins for CORS
-origins = [
+origins: List[str] = [
     "https://gabs-bristol.vercel.app",  # Vercel frontend
     "http://localhost:3000",             # Local React dev server
     "http://localhost:5173",             # Local Vite dev server
@@ -51,9 +57,9 @@ CORS(app, resources={r"/api/*": {"origins": origins}}, supports_credentials=True
 database.init_db()
 
 # --- Debug File Writer Thread ---
-debug_writer_queue = queue.Queue()
+debug_writer_queue: queue.Queue[Tuple[str, str]] = queue.Queue()
 
-def debug_file_writer():
+def debug_file_writer() -> None:
     """A worker thread that writes debug HTML files from a queue."""
     while True:
         try:
@@ -61,7 +67,7 @@ def debug_file_writer():
             filepath, content = debug_writer_queue.get()
 
             # A None item is the signal to stop (for graceful shutdown, not used with daemon)
-            if filepath is None:
+            if filepath is None: # type: ignore
                 break
 
             with open(filepath, 'w', encoding='utf-8') as f:
@@ -78,19 +84,21 @@ writer_thread.start()
 
 # --- Session Management ---
 
-def get_scraper_instance(username, password=None):
+def get_scraper_instance(username: str, password: Optional[str] = None) -> Optional[Scraper]:
     """
     Gets a scraper instance for a user by loading their session from the database
     or creating a new one if in a login flow.
     This function does NOT use an in-memory cache.
     """
+    encrypted_password: Optional[str]
+    session_data: Optional[Dict[str, Any]]
     encrypted_password, session_data = database.load_session(username)
 
     # Case 1: Login flow (password is provided)
     if password:
         try:
             scraper = Scraper(username, password)
-            encrypted_pass = crypto.encrypt(password)
+            encrypted_pass: str = crypto.encrypt(password)
             # Save the new session to the database immediately
             database.save_session(username, encrypted_pass, scraper.to_dict())
             return scraper
@@ -101,7 +109,7 @@ def get_scraper_instance(username, password=None):
     # Case 2: Existing session restoration (no password provided)
     if encrypted_password:
         try:
-            password_to_use = crypto.decrypt(encrypted_password)
+            password_to_use: str = crypto.decrypt(encrypted_password)
             scraper = Scraper(username, password_to_use, session_data=session_data)
             # The session is not saved here to avoid writing to DB on every request.
             # Session saving is handled by the login flow and the refresh_sessions job.
@@ -114,7 +122,7 @@ def get_scraper_instance(username, password=None):
     logging.warning(f"No session or credentials found for {username}. Cannot create scraper instance.")
     return None
 
-def handle_session_expiration(username):
+def handle_session_expiration(username: str) -> None:
     """
     Handles a SessionExpiredError. It logs the event and relies on the proactive
     `refresh_sessions` job or the user logging in again to fix it.
@@ -127,138 +135,46 @@ def handle_session_expiration(username):
 
 
 # --- APScheduler Configuration ---
-jobstores = {
+jobstores: Dict[str, SQLAlchemyJobStore] = {
     'default': SQLAlchemyJobStore(url=f'sqlite:///{database.DATABASE_FILE}')
 }
 scheduler = BackgroundScheduler(jobstores=jobstores)
 
-def process_auto_bookings():
-    with app.app_context():
-        pending_bookings = database.get_pending_auto_bookings()
-        now = datetime.now()
+# Wrapper function for the moved auto-booking processing logic
+def process_auto_bookings() -> None:
+    auto_booking_service.process_auto_bookings_job(
+        app_instance=app,
+        debug_writer_queue_instance=debug_writer_queue,
+        get_scraper_instance_func=get_scraper_instance,
+        handle_session_expiration_func=handle_session_expiration
+    )
 
-        for booking_summary in pending_bookings:
-            booking_id = booking_summary[0]
 
-            # Attempt to lock the booking before processing
-            if not database.lock_auto_booking(booking_id):
-                logging.warning(f"Booking {booking_id} is already in 'in_progress' state or could not be locked. Skipping for now.")
-                continue
-
-            try:
-                # Refetch the full booking details now that we have the lock
-                booking = database.get_auto_booking_by_id(booking_id)
-                if not booking or booking[4] != 'in_progress': # status is at index 4
-                    logging.warning(f"Could not refetch booking {booking_id} or status was not 'in_progress' after locking. Skipping.")
-                    continue
-
-                booking_id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date = booking
-
-                today = datetime.now()
-                days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
-                target_day_index = days_of_week_map[day_of_week]
-                
-                days_until_target = (target_day_index - today.weekday() + 7) % 7
-                next_occurrence_date = today + timedelta(days=days_until_target)
-                current_target_date = next_occurrence_date.strftime("%Y-%m-%d")
-
-                if last_booked_date == current_target_date:
-                    database.update_auto_booking_status(booking_id, 'pending') # Release the lock
-                    continue
-
-                target_datetime = datetime.strptime(f"{current_target_date} {target_time}", "%Y-%m-%d %H:%M")
-                booking_time = int((target_datetime - timedelta(hours=48)).timestamp())
-
-                if booking_time > int(datetime.now().timestamp()):
-                    database.update_auto_booking_status(booking_id, 'pending') # Release the lock
-                    continue
-                
-                try:
-                    user_scraper = get_scraper_instance(username)
-                    if not user_scraper:
-                        logging.warning(f"Scraper session for {username} not found for auto-booking {booking_id}. Re-login required.")
-                        database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(datetime.now().timestamp()))
-                        continue
-
-                    logging.info(f"Attempting to book class on {current_target_date} at {target_time} with {instructor} for user {username} (Booking ID: {booking_id})")
-                    result = user_scraper.find_and_book_class(target_date_str=current_target_date, class_name=class_name, target_time=target_time, instructor=instructor)
-                    
-                    result_message = result.get('message', '').lower()
-                    if result.get('status') == 'success' or (result.get('status') == 'info' and ("already registered" in result_message or "waiting list" in result_message or "already booked" in result_message)):
-                        
-                        # Use the class name from the scraper result if available, otherwise use the original class name
-                        booked_class_name = result.get('class_name', class_name)
-
-                        database.update_auto_booking_status(booking_id, 'pending', last_booked_date=current_target_date, last_attempt_at=int(datetime.now().timestamp()), retry_count=0)
-                        database.add_live_booking(username, booked_class_name, current_target_date, target_time, instructor, booking_id)
-                        logging.info(f"Successfully processed booking for auto-booking {booking_id}. Status: {result.get('message')}")
-                    else:
-                        if 'Could not find a suitable match' in result.get('message', ''):
-                            new_retry_count = (retry_count or 0) + 1
-                            
-                            html_content = result.get('html_content')
-                            if html_content:
-                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                debug_filename = f"debug_booking_{booking_id}_{timestamp}.html"
-                                debug_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), debug_filename)
-                                # Put the file writing task into the queue instead of writing directly
-                                debug_writer_queue.put((debug_filepath, html_content))
-                                logging.info(f"Queued debug HTML for booking {booking_id} to be written to {debug_filename}")
-
-                            if new_retry_count < 2:
-                                database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
-                                logging.warning(f"Booking attempt failed for auto-booking {booking_id} (match not found). Retrying once. Result: {result.get('message')}")
-                            else:
-                                database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
-                                logging.error(f"Booking attempt failed for auto-booking {booking_id} after 2 attempts (match not found). Marking as failed. Result: {result.get('message')}")
-                        else:
-                            new_retry_count = (retry_count or 0) + 1
-                            if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:
-                                database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
-                                logging.warning(f"Booking attempt failed for auto-booking {booking_id}. Retrying (attempt {new_retry_count}). Result: {result}")
-                            else:
-                                database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
-                                logging.error(f"Booking attempt failed for auto-booking {booking_id} after {new_retry_count} retries. Marking as failed. Result: {result}")
-                except SessionExpiredError:
-                    handle_session_expiration(username)
-                    logging.warning(f"Session expired for {username} during auto-booking. Re-logged in, will retry on next cycle.")
-                    database.update_auto_booking_status(booking_id, 'pending') # Release lock
-                except Exception as e:
-                    new_retry_count = (retry_count or 0) + 1
-                    if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:
-                        database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
-                        logging.error(f"Error during booking attempt for auto-booking {booking_id}: {e}. Retrying (attempt {new_retry_count}).")
-                    else:
-                        database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(datetime.now().timestamp()), retry_count=new_retry_count)
-                        logging.error(f"Error during booking attempt for auto-booking {booking_id}: {e}. Marking as failed after {new_retry_count} retries.")
-            finally:
-                # Safeguard to ensure the lock is always released.
-                current_booking_state = database.get_auto_booking_by_id(booking_id)
-                if current_booking_state and current_booking_state[4] == 'in_progress':
-                     database.update_auto_booking_status(booking_id, 'pending')
-                     logging.warning(f"Booking {booking_id} was left in 'in_progress' state and has been reset to 'pending'.")
-
-def send_cancellation_reminders():
+def send_cancellation_reminders() -> None:
     with app.app_context():
         logging.info("Running send_cancellation_reminders job.")
-        live_bookings_to_remind = database.get_live_bookings_for_reminder()
-        now = datetime.now()
+        live_bookings_to_remind: List[Tuple] = database.get_live_bookings_for_reminder()
+        now: datetime = datetime.now()
 
         for booking in live_bookings_to_remind:
-            booking_id, username, class_name, class_date_str, class_time_str, instructor = booking
+            booking_id: int = booking[0] # type: ignore
+            username: str = booking[1] # type: ignore
+            class_name: str = booking[2] # type: ignore
+            class_date_str: str = booking[3] # type: ignore
+            class_time_str: str = booking[4] # type: ignore
+            instructor: Optional[str] = booking[5] # type: ignore
 
-            class_datetime = datetime.strptime(f"{class_date_str} {class_time_str}", "%Y-%m-%d %H:%M")
+            class_datetime: datetime = datetime.strptime(f"{class_date_str} {class_time_str}", "%Y-%m-%d %H:%M")
 
-            time_until_class = class_datetime - now
+            time_until_class: timedelta = class_datetime - now
             
             # Define the reminder window: exactly 3 hours and 30 minutes before the class
-            reminder_threshold = timedelta(hours=3, minutes=30)
             
             # Check if current time is within a small window around the reminder_threshold
             # To avoid missing the exact second, we check a small interval, e.g., +/- 1 minute
             if timedelta(hours=3, minutes=25) <= time_until_class <= timedelta(hours=3, minutes=35):
                 logging.info(f"Sending cancellation reminder for live booking ID {booking_id} for user {username}.")
-                subscriptions = database.get_push_subscriptions_for_user(username)
+                subscriptions: List[Dict[str, Any]] = database.get_push_subscriptions_for_user(username)
                 
                 if subscriptions:
                     for sub in subscriptions:
@@ -273,8 +189,8 @@ def send_cancellation_reminders():
                                     "tag": f"cancellation-reminder-{booking_id}",
                                     "url": "/live-booking"
                                 }),
-                                vapid_private_key=config.VAPID_PRIVATE_KEY,
-                                vapid_claims={"sub": f"mailto:{config.VAPID_ADMIN_EMAIL}"}
+                                vapid_private_key=config.VAPID_PRIVATE_KEY, # type: ignore
+                                vapid_claims={"sub": f"mailto:{config.VAPID_ADMIN_EMAIL}"} # type: ignore
                             )
                             logging.info(f"Cancellation reminder sent to {username} for live booking ID {booking_id}.")
                             database.update_live_booking_reminder_status(booking_id, reminder_sent=1)
@@ -290,40 +206,40 @@ def send_cancellation_reminders():
             else:
                 logging.debug(f"Live booking ID {booking_id} for {username} not within cancellation reminder window. Time until class: {time_until_class}")
 
-def reset_failed_bookings():
+def reset_failed_bookings() -> None:
     with app.app_context():
         logging.info("Running reset_failed_bookings job.")
-        stuck_bookings = database.get_stuck_bookings()
-        now_timestamp = int(datetime.now().timestamp())
-        reset_threshold_seconds = 24 * 60 * 60  # 24 hours
+        stuck_bookings: List[Tuple] = database.get_stuck_bookings()
+        now_timestamp: int = int(datetime.now().timestamp())
+        reset_threshold_seconds: int = 24 * 60 * 60  # 24 hours
 
-        for booking_id, last_attempt_at, status in stuck_bookings:
+        for booking_id, last_attempt_at, status in stuck_bookings: # type: ignore
             if status == 'in_progress':
                 logging.warning(f"Auto-booking ID {booking_id} found stuck in 'in_progress' state. Resetting to 'pending'.")
                 database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=None, retry_count=0)
             elif status == 'failed':
-                if last_attempt_at and (now_timestamp - last_attempt_at) > reset_threshold_seconds:
+                if last_attempt_at and (now_timestamp - last_attempt_at) > reset_threshold_seconds: # type: ignore
                     logging.info(f"Resetting failed auto-booking ID {booking_id} to pending.")
                     database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=None, retry_count=0)
                 else:
                     logging.debug(f"Failed auto-booking ID {booking_id} not yet eligible for reset.")
 
-def refresh_sessions():
+def refresh_sessions() -> None:
     """
     Proactively refreshes all user sessions and syncs their live bookings.
     """
     with app.app_context():
-        users = database.get_all_users()
+        users: List[str] = database.get_all_users()
         if not users:
             logging.info("No users found in the database to refresh sessions for.")
             return
 
         for username in users:
             try:
-                scraper = get_scraper_instance(username)
+                scraper: Optional[Scraper] = get_scraper_instance(username)
                 if scraper:
                     # Perform a lightweight, safe operation to check session validity
-                    bookings = scraper.get_my_bookings()
+                    bookings: List[Dict[str, Any]] = scraper.get_my_bookings()
                     database.touch_session(username) # Session is valid, so we touch the timestamp
                     sync_live_bookings(username, bookings)
                     logging.debug(f"Session for {username} is valid and bookings synced.")
@@ -335,156 +251,251 @@ def refresh_sessions():
             except Exception as e:
                 logging.error(f"An unexpected error occurred while refreshing session for {username}: {e}")
 
-app.config["JWT_SECRET_KEY"] = config.JWT_SECRET_KEY
+app.config["JWT_SECRET_KEY"] = config.JWT_SECRET_KEY # type: ignore
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
 jwt = JWTManager(app)
 
 # --- API Endpoints ---
 
-def admin_required(fn):
+def admin_required(fn: Callable) -> Callable:
     @wraps(fn)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         verify_jwt_in_request()
-        current_user = get_jwt_identity()
-        if current_user != config.ADMIN_EMAIL:
+        current_user: str = get_jwt_identity() # type: ignore
+        if current_user != config.ADMIN_EMAIL: # type: ignore
             return jsonify({"error": "Admins only!"}), 403
         return fn(*args, **kwargs)
     return wrapper
 
 @app.route('/api/login', methods=['POST'])
 @limiter.limit("10/minute")
-def login_user():
-    data = request.get_json()
-    username = data.get('username', None)
-    password = data.get('password', None)
+def login_user() -> Tuple[Any, int]:
+    """
+    Authenticate a user and return a JWT access token.
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - username
+            - password
+          properties:
+            username:
+              type: string
+              description: User's email/username
+            password:
+              type: string
+              description: User's password
+    responses:
+      200:
+        description: Login successful
+        schema:
+          type: object
+          properties:
+            access_token:
+              type: string
+      400:
+        description: Missing username or password
+      401:
+        description: Invalid credentials or login failed
+    """
+    data: Dict[str, Any] = request.get_json() # type: ignore
+    username: Optional[str] = data.get('username')
+    password: Optional[str] = data.get('password')
 
     if not username or not password:
         return jsonify({"error": "Username and password required"}), 400
 
     try:
         logging.info(f"Login attempt for user: {username}")
-        user_scraper = get_scraper_instance(username, password)
+        user_scraper: Optional[Scraper] = get_scraper_instance(username, password)
         if not user_scraper:
             raise Exception("Failed to create scraper instance.")
         
-        access_token = create_access_token(identity=username)
+        access_token: str = create_access_token(identity=username)
         logging.info(f"Successfully created session and token for {username}")
-        return jsonify(access_token=access_token)
+        return jsonify(access_token=access_token), 200
     except Exception as e:
         logging.error(f"Failed login for user {username}: {e}")
         return jsonify({"error": "Invalid credentials or login failed"}), 401
 
 @app.route("/api/logout", methods=["POST"])
 @jwt_required()
-def logout_user():
-    current_user = get_jwt_identity()
+def logout_user() -> Tuple[Any, int]:
+    current_user: str = get_jwt_identity() # type: ignore
     database.delete_session(current_user)
     logging.info(f"Removed session for user: {current_user}")
-    return jsonify({"message": "Successfully logged out"})
+    return jsonify({"message": "Successfully logged out"}), 200
 
 # --- Wrapper for scraper endpoints ---
-def scraper_endpoint(f):
+def scraper_endpoint(f: Callable) -> Callable:
     @wraps(f)
-    @jwt_required()
-    def decorated_function(*args, **kwargs):
-        current_user = get_jwt_identity()
+    def decorated_function(*args: Any, **kwargs: Any) -> Any:
+        verify_jwt_in_request() # Ensure JWT is present and valid
+        current_user: str = get_jwt_identity() # type: ignore
         try:
-            user_scraper = get_scraper_instance(current_user)
+            user_scraper: Optional[Scraper] = get_scraper_instance(current_user)
             if not user_scraper:
-                return jsonify({"error": "Session not found. Please log in again."}), 401
+                return jsonify({"error": "Session not found. Please log in again."} ), 401
             return f(user_scraper, *args, **kwargs)
         except SessionExpiredError:
             # This is now the primary failure point if a session is truly expired and couldn't be revived.
             # The handle_session_expiration function is called, which just logs the issue.
             # We then return a 401 to force the user to log in again via the client.
             handle_session_expiration(current_user)
-            return jsonify({"error": "Your session has expired. Please log in again."}), 401
+            return jsonify({"error": "Your session has expired. Please log in again."} ), 401
         except Exception as e:
             logging.error(f"Unhandled error in scraper endpoint for user {current_user}: {e}")
-            return jsonify({"error": "An internal server error occurred."}), 500
+            return jsonify({"error": "An internal server error occurred."} ), 500
     return decorated_function
 
 @app.route('/api/classes', methods=['GET'])
 @scraper_endpoint
-def get_available_classes(user_scraper):
-    classes = user_scraper.get_classes(days_in_advance=3)
-    return jsonify(classes)
+def get_available_classes(user_scraper: Scraper) -> Tuple[Any, int]:
+    """
+    Get available classes for the next 3 days.
+    ---
+    tags:
+      - Classes
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of available classes
+      401:
+        description: Session expired or invalid
+    """
+    classes: List[Dict[str, Any]] = user_scraper.get_classes(days_in_advance=3)
+    return jsonify(classes), 200
 
 @app.route('/api/book', methods=['POST'])
 @scraper_endpoint
-def book_class(user_scraper):
-    data = request.get_json()
-    class_name = data.get('class_name')
-    target_date = data.get('date')
-    target_time = data.get('time')
+def book_class(user_scraper: Scraper) -> Tuple[Any, int]:
+    """
+    Book a specific class.
+    ---
+    tags:
+      - Booking
+    security:
+      - Bearer: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - class_name
+            - date
+            - time
+          properties:
+            class_name:
+              type: string
+            date:
+              type: string
+              format: date
+              example: "2025-01-01"
+            time:
+              type: string
+              example: "10:00"
+    responses:
+      200:
+        description: Booking result
+      400:
+        description: Missing parameters
+      401:
+        description: Session expired
+    """
+    data: Dict[str, Any] = request.get_json() # type: ignore
+    class_name: Optional[str] = data.get('class_name')
+    target_date: Optional[str] = data.get('date')
+    target_time: Optional[str] = data.get('time')
     if not all([class_name, target_date, target_time]):
         return jsonify({"error": "class_name, date, and time are required."} ), 400
     
     logging.info(f"User {user_scraper.username} attempting to book class {class_name} on {target_date} at {target_time}")
-    result = user_scraper.find_and_book_class(
-        target_date_str=target_date, 
-        class_name=class_name, 
-        target_time=target_time
+    result: Dict[str, Any] = user_scraper.find_and_book_class( # type: ignore
+        target_date_str=target_date, # type: ignore
+        class_name=class_name, # type: ignore
+        target_time=target_time # type: ignore
     )
     return jsonify(result), 200
 
 @app.route('/api/cancel', methods=['POST'])
 @scraper_endpoint
-def cancel_booking(user_scraper):
-    data = request.get_json()
-    class_name = data.get('class_name')
-    target_date = data.get('date')
-    target_time = data.get('time')
+def cancel_booking(user_scraper: Scraper) -> Tuple[Any, int]:
+    data: Dict[str, Any] = request.get_json() # type: ignore
+    class_name: Optional[str] = data.get('class_name')
+    target_date: Optional[str] = data.get('date')
+    target_time: Optional[str] = data.get('time')
     if not class_name or not target_date or not target_time:
         return jsonify({"error": "class_name, date, and time are required."} ), 400
     
     logging.info(f"User {user_scraper.username} attempting to cancel class {class_name} on {target_date} at {target_time}")
-    result = user_scraper.find_and_cancel_booking(class_name, target_date, target_time)
+    result: Dict[str, Any] = user_scraper.find_and_cancel_booking(class_name, target_date, target_time) # type: ignore
     
     if result.get('status') == 'success':
-        database.delete_live_booking(user_scraper.username, class_name, target_date, target_time)
-        logging.info(f"Deleted live booking for {user_scraper.username}: {class_name} on {target_date} at {target_time} from database.")
+        database.delete_live_booking(user_scraper.username, class_name, target_date, target_time) # type: ignore
+        logging.info(f"Deleted live booking for {user_scraper.username}: {class_name} on {target_date} at {target_time} from database.") # type: ignore
 
     return jsonify(result), 200
 
 @app.route('/api/bookings', methods=['GET'])
 @scraper_endpoint
-def get_my_bookings(user_scraper):
-    bookings = user_scraper.get_my_bookings()
+def get_my_bookings(user_scraper: Scraper) -> Tuple[Any, int]:
+    """
+    Get the user's current bookings.
+    ---
+    tags:
+      - Booking
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of booked classes
+      401:
+        description: Session expired
+    """
+    bookings: List[Dict[str, Any]] = user_scraper.get_my_bookings()
     sync_live_bookings(user_scraper.username, bookings)
     database.touch_session(user_scraper.username) # Session is valid, so we touch the timestamp
-    return jsonify(bookings)
+    return jsonify(bookings), 200
 
-def sync_live_bookings(username, scraped_bookings):
+def sync_live_bookings(username: str, scraped_bookings: List[Dict[str, Any]]) -> None:
     """
     Synchronizes the live_bookings table for a user with a fresh list of scraped bookings.
     """
     # 1. Get all current live bookings for the user from the database
-    db_bookings_raw = database.get_live_bookings_for_user(username)
-    db_bookings = set()
-    db_bookings_map = {}  # Map to store original case and id
+    db_bookings_raw: List[Tuple] = database.get_live_bookings_for_user(username)
+    db_bookings: set[Tuple[str, str, str]] = set()
+    db_bookings_map: Dict[Tuple[str, str, str], Dict[str, Any]] = {}  # Map to store original case and id
     for b in db_bookings_raw:
         # Create a unique tuple for each booking in lowercase
-        key = (b[2].lower(), b[3], b[4]) # class_name, class_date, class_time
+        key = (b[2].lower(), b[3], b[4]) # class_name, class_date, class_time # type: ignore
         db_bookings.add(key)
-        db_bookings_map[key] = {'name': b[2], 'id': b[0]} # Store original class name and id
+        db_bookings_map[key] = {'name': b[2], 'id': b[0]} # Store original class name and id # type: ignore
 
     # 2. Get all scraped bookings
-    scraped_bookings_set = set()
-    scraped_bookings_map = {} # Map to store original case
+    scraped_bookings_set: set[Tuple[str, str, str]] = set()
+    scraped_bookings_map: Dict[Tuple[str, str, str], str] = {} # Map to store original case
     for booking in scraped_bookings:
-        class_name = booking.get('name')
-        class_date_raw = booking.get('date')
-        class_time = booking.get('time')
+        class_name: Optional[str] = booking.get('name')
+        class_date_raw: Optional[str] = booking.get('date')
+        class_time: Optional[str] = booking.get('time')
         
         if class_name and class_date_raw and class_time:
             try:
                 date_part = ' '.join(class_date_raw.split(' ')[1:])
                 date_part = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_part)
-                current_year = datetime.now().year
-                parsed_date = datetime.strptime(f"{date_part} {current_year}", "%d %B %Y")
-                class_date = parsed_date.strftime("%Y-%m-%d")
+                current_year: int = datetime.now().year
+                parsed_date: datetime = datetime.strptime(f"{date_part} {current_year}", "%d %B %Y")
+                class_date: str = parsed_date.strftime("%Y-%m-%d")
                 key = (class_name.lower(), class_date, class_time)
                 scraped_bookings_set.add(key)
                 scraped_bookings_map[key] = class_name # Store original class name
@@ -493,29 +504,29 @@ def sync_live_bookings(username, scraped_bookings):
                 continue
 
     # 3. Find bookings to add, to delete, and to check for case changes
-    bookings_to_add = scraped_bookings_set - db_bookings
-    bookings_to_delete = db_bookings - scraped_bookings_set
-    bookings_to_check = db_bookings.intersection(scraped_bookings_set)
+    bookings_to_add: set[Tuple[str, str, str]] = scraped_bookings_set - db_bookings
+    bookings_to_delete: set[Tuple[str, str, str]] = db_bookings - scraped_bookings_set
+    bookings_to_check: set[Tuple[str, str, str]] = db_bookings.intersection(scraped_bookings_set)
 
     # 4. Check for case changes in existing bookings
     for key in bookings_to_check:
-        scraped_name = scraped_bookings_map[key]
-        db_info = db_bookings_map[key]
-        db_name = db_info['name']
+        scraped_name: str = scraped_bookings_map[key]
+        db_info: Dict[str, Any] = db_bookings_map[key]
+        db_name: str = db_info['name']
         
         if scraped_name != db_name:
-            booking_id = db_info['id']
+            booking_id: int = db_info['id']
             database.update_live_booking_name(booking_id, scraped_name)
             logging.info(f"Updated class name case for booking ID {booking_id} from '{db_name}' to '{scraped_name}'.")
 
     # 5. Add new bookings
     for key in bookings_to_add:
         class_name_lower, class_date, class_time = key
-        class_name_original = scraped_bookings_map[key]
+        class_name_original: str = scraped_bookings_map[key]
         
         # Find the full booking details from the original scraped list
-        full_booking = next((b for b in scraped_bookings if b.get('name', '').lower() == class_name_lower and b.get('time') == class_time), None)
-        instructor = full_booking.get('instructor') if full_booking else None
+        full_booking: Optional[Dict[str, Any]] = next((b for b in scraped_bookings if b.get('name', '').lower() == class_name_lower and b.get('time') == class_time), None)
+        instructor: Optional[str] = full_booking.get('instructor') if full_booking else None
         
         if not database.live_booking_exists(username, class_name_original, class_date, class_time):
             database.add_live_booking(username, class_name_original, class_date, class_time, instructor)
@@ -524,39 +535,39 @@ def sync_live_bookings(username, scraped_bookings):
     # 6. Delete old bookings
     for key in bookings_to_delete:
         class_name_lower, class_date, class_time = key
-        class_name_original = db_bookings_map[key]['name']
+        class_name_original: str = db_bookings_map[key]['name']
         database.delete_live_booking(username, class_name_original, class_date, class_time)
         logging.info(f"Deleted stale live booking for {username}: {class_name_original} on {class_date} at {class_time} from database.")
 
 
 @app.route('/api/static_classes', methods=['GET'])
-def get_static_classes():
+def get_static_classes() -> Tuple[Any, int]:
     # This endpoint does not require authentication or a scraper instance
-    STATIC_TIMETABLE_PATH = os.path.join(os.path.dirname(__file__), 'static_timetable.json')
+    STATIC_TIMETABLE_PATH: str = os.path.join(os.path.dirname(__file__), 'static_timetable.json')
     if os.path.exists(STATIC_TIMETABLE_PATH):
         with open(STATIC_TIMETABLE_PATH, 'r') as f:
-            static_classes_data = json.load(f)
-        return jsonify(static_classes_data)
+            static_classes_data: Dict[str, Any] = json.load(f)
+        return jsonify(static_classes_data), 200
     else:
         logging.warning(f"Static timetable file not found at {STATIC_TIMETABLE_PATH}")
         return jsonify({"error": "Static timetable not found."} ), 404
 
 @app.route('/api/schedule_auto_book', methods=['POST'])
 @jwt_required()
-def schedule_auto_book():
-    current_user = get_jwt_identity()
-    data = request.get_json()
-    class_name = data.get('class_name')
-    target_time_str = data.get('time')
-    day_of_week = data.get('day_of_week')
-    instructor = data.get('instructor')
+def schedule_auto_book() -> Tuple[Any, int]:
+    current_user: str = get_jwt_identity() # type: ignore
+    data: Dict[str, Any] = request.get_json() # type: ignore
+    class_name: Optional[str] = data.get('class_name')
+    target_time_str: Optional[str] = data.get('time')
+    day_of_week: Optional[str] = data.get('day_of_week')
+    instructor: Optional[str] = data.get('instructor')
 
     if not all([class_name, target_time_str, day_of_week, instructor]):
         return jsonify({"error": "class_name, time, day_of_week, and instructor are required."} ), 400
 
     try:
-        booking_id = database.add_auto_booking(
-            current_user, class_name, target_time_str, day_of_week, instructor
+        booking_id: int = database.add_auto_booking(
+            current_user, class_name, target_time_str, day_of_week, instructor # type: ignore
         )
         logging.info(f"Recurring auto-booking scheduled for user {current_user}: Class {class_name} on {day_of_week} at {target_time_str}. Booking ID: {booking_id}")
         return jsonify({"message": "Recurring auto-booking scheduled successfully!", "booking_id": booking_id}), 201
@@ -566,11 +577,11 @@ def schedule_auto_book():
 
 @app.route('/api/auto_bookings', methods=['GET'])
 @jwt_required()
-def get_auto_bookings():
-    current_user = get_jwt_identity()
+def get_auto_bookings() -> Tuple[Any, int]:
+    current_user: str = get_jwt_identity() # type: ignore
     try:
-        bookings = database.get_auto_bookings_for_user(current_user)
-        booking_list = []
+        bookings: List[Tuple] = database.get_auto_bookings_for_user(current_user)
+        booking_list: List[Dict[str, Any]] = []
         for b in bookings:
             booking_list.append({
                 "id": b[0],
@@ -592,10 +603,10 @@ def get_auto_bookings():
 
 @app.route('/api/cancel_auto_book', methods=['POST'])
 @jwt_required()
-def cancel_auto_book():
-    current_user = get_jwt_identity()
-    data = request.get_json()
-    booking_id = data.get('booking_id')
+def cancel_auto_book() -> Tuple[Any, int]:
+    current_user: str = get_jwt_identity() # type: ignore
+    data: Dict[str, Any] = request.get_json() # type: ignore
+    booking_id: Optional[int] = data.get('booking_id')
 
     if not booking_id:
         return jsonify({"error": "booking_id is required."} ), 400
@@ -603,7 +614,7 @@ def cancel_auto_book():
     try:
         if database.cancel_auto_booking(booking_id, current_user):
             logging.info(f"Auto-booking ID {booking_id} cancelled by user {current_user}.")
-            return jsonify({"message": f"Recurring auto-booking cancelled successfully!"} ), 200
+            return jsonify({"message": "Recurring auto-booking cancelled successfully!"} ), 200
         else:
             return jsonify({"error": "Booking not found or not authorized to cancel. Contact Administrator"} ), 404
     except Exception as e:
@@ -611,39 +622,49 @@ def cancel_auto_book():
         return jsonify({"error": "An internal server error occurred."} ), 500
 
 @app.route('/api/vapid-public-key', methods=['GET'])
-def get_vapid_public_key():
-    return config.VAPID_PUBLIC_KEY, 200
+def get_vapid_public_key() -> Tuple[str, int]:
+    return config.VAPID_PUBLIC_KEY, 200 # type: ignore
 
 @app.route('/api/subscribe-push', methods=['POST'])
 @jwt_required()
-def subscribe_push():
-    current_user = get_jwt_identity()
-    subscription_info = request.get_json()
+def subscribe_push() -> Tuple[Any, int]:
+    current_user: str = get_jwt_identity() # type: ignore
+    subscription_info: Dict[str, Any] = request.get_json() # type: ignore
 
     if not subscription_info:
         return jsonify({"error": "Subscription info is required."} ), 400
 
     try:
-        new_subscription = database.save_push_subscription(current_user, subscription_info)
-        if new_subscription:
-            logging.info(f"Push subscription saved for user: {current_user}")
+        database.save_push_subscription(current_user, subscription_info)
+        logging.info(f"Push subscription saved for user: {current_user}")
         return jsonify({"message": "Push subscription successful"}), 201
     except Exception as e:
         logging.error(f"Error saving push subscription for user {current_user}: {e}")
         return jsonify({"error": "Failed to save push subscription."} ), 500
 
+@app.route('/api/health', methods=['GET'])
+def health_check() -> Tuple[Any, int]:
+    """
+    Returns the application's status and uptime.
+    """
+    uptime: timedelta = datetime.now() - app.start_time
+    return jsonify({
+        "status": "ok",
+        "uptime": str(uptime)
+    }), 200
+
 # --- Admin Endpoints ---
 
 @app.route('/api/admin/logs', methods=['GET'])
 @admin_required
-def get_logs():
-    log_pattern = re.compile(r'^(\S+ \S+) - (\w+) - (.*)')
+def get_logs() -> Tuple[Any, int]:
+    log_pattern: re.Pattern[str] = re.compile(r'^(\S+ \S+) - (\w+) - (.*)')
     try:
         with open(LOG_FILE, 'r') as f:
-            lines = f.readlines()
-            parsed_logs = []
+            lines: List[str] = f.readlines()
+            parsed_logs: List[Dict[str, str]] = []
             for line in reversed(lines[-100:]):
-                match = log_pattern.match(line.strip())
+                match: Optional[re.Match[str]] = log_pattern.match(line.strip())
                 if match:
                     parsed_logs.append({
                         "timestamp": match.group(1),
@@ -659,15 +680,15 @@ def get_logs():
                             "level": "RAW",
                             "message": line.strip()
                         })
-            return jsonify({"logs": parsed_logs})
+            return jsonify({"logs": parsed_logs}), 200
     except FileNotFoundError:
         return jsonify({"error": "Log file not found."} ), 404
 
 @app.route('/api/admin/auto_bookings', methods=['GET'])
 @admin_required
-def get_all_auto_bookings():
-    bookings_raw = database.get_all_auto_bookings()
-    bookings_formatted = []
+def get_all_auto_bookings() -> Tuple[Any, int]:
+    bookings_raw: List[Dict[str, Any]] = database.get_all_auto_bookings()
+    bookings_formatted: List[Dict[str, Any]] = []
     for b in bookings_raw:
         bookings_formatted.append({
             "id": b["id"],
@@ -682,44 +703,44 @@ def get_all_auto_bookings():
             "instructor": b["instructor"],
             "last_booked_date": b["last_booked_date"]
         })
-    return jsonify(bookings_formatted)
+    return jsonify(bookings_formatted), 200
 
 @app.route('/api/admin/live_bookings', methods=['GET'])
 @admin_required
-def get_all_live_bookings():
-    bookings = database.get_all_live_bookings()
-    return jsonify(bookings)
+def get_all_live_bookings() -> Tuple[Any, int]:
+    bookings: List[Dict[str, Any]] = database.get_all_live_bookings()
+    return jsonify(bookings), 200
 
 @app.route('/api/admin/push_subscriptions', methods=['GET'])
 @admin_required
-def get_all_push_subscriptions():
-    subscriptions = database.get_all_push_subscriptions()
-    return jsonify(subscriptions)
+def get_all_push_subscriptions() -> Tuple[Any, int]:
+    subscriptions: List[Dict[str, Any]] = database.get_all_push_subscriptions()
+    return jsonify(subscriptions), 200
 
 @app.route('/api/admin/sessions', methods=['GET'])
 @admin_required
-def get_all_sessions():
-    sessions = database.get_all_sessions()
-    return jsonify(sessions)
+def get_all_sessions() -> Tuple[Any, int]:
+    sessions: List[Dict[str, Any]] = database.get_all_sessions()
+    return jsonify(sessions), 200
 
 @app.route('/api/admin/status', methods=['GET'])
 @admin_required
-def get_status():
-    uptime = datetime.now() - app.start_time
-    ssh_command = None
+def get_status() -> Tuple[Any, int]:
+    uptime: timedelta = datetime.now() - app.start_time
+    ssh_command: Optional[str] = None
     try:
-        tunnels_response = requests.get('http://127.0.0.1:4040/api/tunnels')
+        tunnels_response: requests.Response = requests.get('http://127.0.0.1:4040/api/tunnels')
         tunnels_response.raise_for_status()
-        tunnels_data = tunnels_response.json()
+        tunnels_data: Dict[str, Any] = tunnels_response.json()
         for tunnel in tunnels_data.get('tunnels', []):
             if tunnel.get('proto') == 'tcp':
-                public_url = tunnel.get('public_url')
+                public_url: Optional[str] = tunnel.get('public_url')
                 if public_url:
                     # Extract host and port
-                    match = re.match(r'tcp://(.+):(\d+)', public_url)
+                    match: Optional[re.Match[str]] = re.match(r'tcp://(.+):(\d+)', public_url)
                     if match:
-                        host = match.group(1)
-                        port = match.group(2)
+                        host: str = match.group(1)
+                        port: str = match.group(2)
                         ssh_command = f"ssh -p {port} gabs-admin@{host}"
                 break
     except requests.exceptions.RequestException as e:
@@ -729,8 +750,7 @@ def get_status():
         "status": "ok",
         "uptime": str(uptime),
         "ssh_tunnel_command": ssh_command
-    })
-
+    }), 200
 
 
 if __name__ == '__main__':

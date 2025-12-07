@@ -1,9 +1,8 @@
-import pytest
 import sqlite3
 from datetime import datetime
-import database
+from gabs_api_server import database
 import threading
-
+import pytest
 
 
 def test_add_auto_booking(memory_db):
@@ -50,6 +49,15 @@ def test_update_auto_booking_status(memory_db):
 
     assert booking[0] == "booked"
     assert booking[1] == "2025-10-26"
+
+def test_update_auto_booking_status_to_failed(memory_db):
+    booking_id = database.add_auto_booking("test_user", "Test Class", "10:00", "Monday", "Test Instructor")
+    database.update_auto_booking_status(booking_id, status="failed", retry_count=3)
+    
+    updated_booking = database.get_auto_booking_by_id(booking_id)
+    assert updated_booking[4] == 'failed'
+    assert updated_booking[7] == 3
+
 
 def test_get_auto_bookings_for_user(memory_db):
     database.add_auto_booking("test_user", "Test Class", "10:00", "Monday", "Test Instructor")
@@ -179,7 +187,7 @@ def test_add_and_get_live_booking(memory_db):
     class_time = "12:00"
     instructor = "Santa"
     
-    booking_id = database.add_live_booking(username, class_name, class_date, class_time, instructor)
+    database.add_live_booking(username, class_name, class_date, class_time, instructor)
     
     bookings = database.get_live_bookings_for_user(username)
     

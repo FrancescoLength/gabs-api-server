@@ -3,17 +3,18 @@ import sqlite3
 import json
 from datetime import datetime
 import logging
+from typing import List, Optional, Tuple, Any, Dict, Union
 
-DATABASE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'auto_bookings.db')
+DATABASE_FILE = os.environ.get('GABS_DB_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'auto_bookings.db'))
 
-def get_db_connection(timeout=30):
+def get_db_connection(timeout: int = 30) -> sqlite3.Connection:
     """Establishes a database connection with a default timeout."""
     conn = sqlite3.connect(DATABASE_FILE, timeout=timeout)
     # Optional: If you want to fetch rows as dictionaries
     # conn.row_factory = sqlite3.Row
     return conn
 
-def init_db():
+def init_db() -> None:
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -80,18 +81,18 @@ def init_db():
     conn.close()
 
 # Auto-booking functions
-def add_auto_booking(username, class_name, target_time, day_of_week, instructor):
+def add_auto_booking(username: str, class_name: str, target_time: str, day_of_week: str, instructor: str) -> int:
     conn = get_db_connection()
     cursor = conn.cursor()
     created_at = int(datetime.now().timestamp())
     cursor.execute("INSERT INTO auto_bookings (username, class_name, target_time, status, created_at, day_of_week, instructor) VALUES (?, ?, ?, ?, ?, ?, ?)",
                    (username, class_name, target_time, 'pending', created_at, day_of_week, instructor))
     conn.commit()
-    booking_id = cursor.lastrowid
+    booking_id: int = cursor.lastrowid  # type: ignore
     conn.close()
     return booking_id
 
-def get_pending_auto_bookings():
+def get_pending_auto_bookings() -> List[Tuple]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM auto_bookings WHERE status = 'pending'")
@@ -99,12 +100,12 @@ def get_pending_auto_bookings():
     conn.close()
     return bookings
 
-def update_auto_booking_status(booking_id, status=None, last_booked_date=None, last_attempt_at=None, retry_count=None):
+def update_auto_booking_status(booking_id: int, status: Optional[str] = None, last_booked_date: Optional[str] = None, last_attempt_at: Optional[int] = None, retry_count: Optional[int] = None) -> None:
     conn = get_db_connection()
     cursor = conn.cursor()
     
     updates = []
-    params = []
+    params: List[Any] = []
 
     if status is not None:
         updates.append("status = ?")
@@ -120,6 +121,7 @@ def update_auto_booking_status(booking_id, status=None, last_booked_date=None, l
         params.append(retry_count)
 
     if not updates:
+        conn.close()
         return
 
     query = f"UPDATE auto_bookings SET {', '.join(updates)} WHERE id = ?"
@@ -129,7 +131,7 @@ def update_auto_booking_status(booking_id, status=None, last_booked_date=None, l
     conn.commit()
     conn.close()
 
-def get_auto_bookings_for_user(username):
+def get_auto_bookings_for_user(username: str) -> List[Tuple]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM auto_bookings WHERE username = ?", (username,))
@@ -137,7 +139,7 @@ def get_auto_bookings_for_user(username):
     conn.close()
     return bookings
 
-def cancel_auto_booking(booking_id, username):
+def cancel_auto_booking(booking_id: int, username: str) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM auto_bookings WHERE id = ? AND username = ?", (booking_id, username))
@@ -146,7 +148,7 @@ def cancel_auto_booking(booking_id, username):
     conn.close()
     return deleted_rows > 0
 
-def get_stuck_bookings():
+def get_stuck_bookings() -> List[Tuple]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, last_attempt_at, status FROM auto_bookings WHERE status IN ('failed', 'in_progress')")
@@ -154,7 +156,7 @@ def get_stuck_bookings():
     conn.close()
     return bookings
 
-def get_auto_booking_by_id(booking_id):
+def get_auto_booking_by_id(booking_id: int) -> Optional[Tuple]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date FROM auto_bookings WHERE id = ?", (booking_id,))
@@ -162,7 +164,7 @@ def get_auto_booking_by_id(booking_id):
     conn.close()
     return booking
 
-def lock_auto_booking(booking_id):
+def lock_auto_booking(booking_id: int) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -182,7 +184,7 @@ def lock_auto_booking(booking_id):
     finally:
         conn.close()
 
-def get_all_auto_bookings():
+def get_all_auto_bookings() -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date FROM auto_bookings")
@@ -205,18 +207,18 @@ def get_all_auto_bookings():
     return bookings
 
 # Live booking functions
-def add_live_booking(username, class_name, class_date, class_time, instructor=None, auto_booking_id=None):
+def add_live_booking(username: str, class_name: str, class_date: str, class_time: str, instructor: Optional[str] = None, auto_booking_id: Optional[int] = None) -> int:
     conn = get_db_connection()
     cursor = conn.cursor()
     created_at = datetime.now().strftime('%d/%m/%y %H:%M:%S')
     cursor.execute("INSERT INTO live_bookings (username, class_name, class_date, class_time, instructor, reminder_sent, created_at, auto_booking_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                    (username, class_name, class_date, class_time, instructor, 0, created_at, auto_booking_id))
     conn.commit()
-    booking_id = cursor.lastrowid
+    booking_id: int = cursor.lastrowid # type: ignore
     conn.close()
     return booking_id
 
-def get_live_bookings_for_user(username):
+def get_live_bookings_for_user(username: str) -> List[Tuple]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM live_bookings WHERE username = ?", (username,))
@@ -224,7 +226,7 @@ def get_live_bookings_for_user(username):
     conn.close()
     return bookings
 
-def live_booking_exists(username, class_name, class_date, class_time):
+def live_booking_exists(username: str, class_name: str, class_date: str, class_time: str) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT 1 FROM live_bookings WHERE username = ? AND class_name = ? AND class_date = ? AND class_time = ?",
@@ -233,7 +235,7 @@ def live_booking_exists(username, class_name, class_date, class_time):
     conn.close()
     return exists
 
-def delete_live_booking(username, class_name, class_date, class_time):
+def delete_live_booking(username: str, class_name: str, class_date: str, class_time: str) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM live_bookings WHERE username = ? AND class_name = ? AND class_date = ? AND class_time = ?",
@@ -243,7 +245,7 @@ def delete_live_booking(username, class_name, class_date, class_time):
     conn.close()
     return deleted_rows > 0
 
-def get_live_bookings_for_reminder():
+def get_live_bookings_for_reminder() -> List[Tuple]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, class_name, class_date, class_time, instructor FROM live_bookings WHERE reminder_sent = 0")
@@ -251,21 +253,21 @@ def get_live_bookings_for_reminder():
     conn.close()
     return bookings
 
-def update_live_booking_reminder_status(booking_id, reminder_sent):
+def update_live_booking_reminder_status(booking_id: int, reminder_sent: int) -> None:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE live_bookings SET reminder_sent = ? WHERE id = ?", (reminder_sent, booking_id))
     conn.commit()
     conn.close()
 
-def update_live_booking_name(booking_id, new_name):
+def update_live_booking_name(booking_id: int, new_name: str) -> None:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE live_bookings SET class_name = ? WHERE id = ?", (new_name, booking_id))
     conn.commit()
     conn.close()
 
-def get_all_live_bookings():
+def get_all_live_bookings() -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, class_name, class_date, class_time, instructor, reminder_sent, created_at, auto_booking_id FROM live_bookings")
@@ -286,7 +288,7 @@ def get_all_live_bookings():
     return bookings
 
 # Push subscription functions
-def save_push_subscription(username, subscription_info):
+def save_push_subscription(username: str, subscription_info: Dict[str, Any]) -> None:
     conn = get_db_connection()
     cursor = conn.cursor()
     endpoint = subscription_info.get('endpoint')
@@ -298,7 +300,7 @@ def save_push_subscription(username, subscription_info):
     conn.commit()
     conn.close()
 
-def get_push_subscriptions_for_user(username):
+def get_push_subscriptions_for_user(username: str) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE username = ?", (username,))
@@ -314,7 +316,7 @@ def get_push_subscriptions_for_user(username):
     conn.close()
     return subscriptions
 
-def delete_push_subscription(endpoint):
+def delete_push_subscription(endpoint: str) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
@@ -323,7 +325,7 @@ def delete_push_subscription(endpoint):
     conn.close()
     return deleted_rows > 0
 
-def get_all_push_subscriptions():
+def get_all_push_subscriptions() -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, endpoint, created_at FROM push_subscriptions")
@@ -339,7 +341,7 @@ def get_all_push_subscriptions():
     return subscriptions
 
 # Session functions
-def save_session(username, encrypted_password, session_data):
+def save_session(username: str, encrypted_password: str, session_data: Dict[str, Any]) -> None:
     conn = get_db_connection()
     cursor = conn.cursor()
     updated_at = int(datetime.now().timestamp())
@@ -348,7 +350,7 @@ def save_session(username, encrypted_password, session_data):
     conn.commit()
     conn.close()
 
-def touch_session(username):
+def touch_session(username: str) -> None:
     conn = get_db_connection()
     cursor = conn.cursor()
     updated_at = int(datetime.now().timestamp())
@@ -356,7 +358,7 @@ def touch_session(username):
     conn.commit()
     conn.close()
 
-def load_session(username):
+def load_session(username: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT encrypted_password, session_data FROM sessions WHERE username = ?", (username,))
@@ -366,7 +368,7 @@ def load_session(username):
         return row[0], json.loads(row[1])
     return None, None
 
-def delete_session(username):
+def delete_session(username: str) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM sessions WHERE username = ?", (username,))
@@ -375,7 +377,7 @@ def delete_session(username):
     conn.close()
     return deleted_rows > 0
 
-def get_all_sessions():
+def get_all_sessions() -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT username, encrypted_password, session_data, updated_at FROM sessions")
@@ -383,7 +385,7 @@ def get_all_sessions():
     conn.close()
     return sessions
 
-def get_all_users():
+def get_all_users() -> List[str]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT username FROM sessions")

@@ -1,11 +1,12 @@
 import pytest
-import json
+from gabs_api_server.app import get_scraper_instance, debug_writer_queue, handle_session_expiration, app
+from gabs_api_server import database # Added this import
 
 def test_login_success(client, mocker):
     mock_scraper = mocker.Mock()
     mock_scraper.to_dict.return_value = {}
-    mocker.patch('app.get_scraper_instance', return_value=mock_scraper)
-    mocker.patch('database.save_session')
+    mocker.patch('gabs_api_server.app.get_scraper_instance', return_value=mock_scraper)
+    mocker.patch('gabs_api_server.database.save_session')
     
     response = client.post('/api/login', json={'username': 'test', 'password': 'pw'})
     
@@ -13,31 +14,32 @@ def test_login_success(client, mocker):
     assert 'access_token' in response.json
 
 def test_login_failure(client, mocker):
-    mocker.patch('app.get_scraper_instance', return_value=None)
+    mocker.patch('gabs_api_server.app.get_scraper_instance', return_value=None)
     
     response = client.post('/api/login', json={'username': 'test', 'password': 'pw'})
     
     assert response.status_code == 401
 
-@pytest.fixture
-def auth_client(client, mocker):
-    mock_scraper = mocker.Mock()
-    mock_scraper.to_dict.return_value = {}
-    mocker.patch('app.get_scraper_instance', return_value=mock_scraper)
-    mocker.patch('database.save_session')
-    
-    response = client.post('/api/login', json={'username': 'test', 'password': 'pw'})
-    token = response.json['access_token']
-    
-    client.environ_base['HTTP_AUTHORIZATION'] = f'Bearer {token}'
-    return client
+def test_get_classes_with_auth(client, mocker): # Changed auth_client to client
+    # Mock jwt_required/verify_jwt_in_request
+    mocker.patch('gabs_api_server.app.verify_jwt_in_request', return_value=True)
+    mocker.patch('gabs_api_server.app.get_jwt_identity', return_value='test_user')
 
-def test_get_classes_with_auth(auth_client, mocker):
-    get_scraper_instance_mock = mocker.patch('app.get_scraper_instance')
-    mock_scraper = get_scraper_instance_mock.return_value
-    mock_scraper.get_classes.return_value = [{'name': 'Test Class'}]
+    # Login to get a token (still needed for the mock scraper initialization)
+    mock_scraper_login = mocker.Mock()
+    mock_scraper_login.to_dict.return_value = {}
+    mocker.patch('gabs_api_server.app.get_scraper_instance', return_value=mock_scraper_login)
+    mocker.patch('gabs_api_server.database.save_session')
+
+    login_response = client.post('/api/login', json={'username': 'test_user', 'password': 'pw'})
+    token = login_response.json['access_token']
+
+    # Mock get_scraper_instance for the actual API call
+    get_scraper_instance_mock = mocker.patch('gabs_api_server.app.get_scraper_instance')
+    mock_scraper_for_api = get_scraper_instance_mock.return_value
+    mock_scraper_for_api.get_classes.return_value = [{'name': 'Test Class'}]
     
-    response = auth_client.get('/api/classes')
+    response = client.get('/api/classes', headers={'Authorization': f'Bearer {token}'}) # Pass token explicitly
     
     assert response.status_code == 200
     assert len(response.json) == 1
