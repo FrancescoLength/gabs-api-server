@@ -74,6 +74,19 @@ def test_get_auto_bookings_error(client, auth_headers, mocker):
     response = client.get('/api/auto_bookings', headers=auth_headers)
     assert response.status_code == 500
 
+def test_get_auto_bookings_null_values(client, auth_headers, mocker):
+    # Simulate DB returning None for optional fields
+    mock_bookings = [
+        (1, 'test_user', 'Class', '10:00', 'pending', 'now', None, 0, 'Monday', None, None)
+    ]
+    mocker.patch('gabs_api_server.database.get_auto_bookings_for_user', return_value=mock_bookings)
+    
+    response = client.get('/api/auto_bookings', headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json[0]
+    assert data['instructor'] == ""
+    assert data['last_booked_date'] == ""
+
 def test_cancel_auto_book_success(client, auth_headers, mocker):
     mocker.patch('gabs_api_server.database.cancel_auto_booking', return_value=True)
     

@@ -599,8 +599,8 @@ def get_auto_bookings() -> Tuple[Any, int]:
                 "last_attempt_at": b[6],
                 "retry_count": b[7],
                 "day_of_week": b[8],
-                "instructor": b[9],
-                "last_booked_date": b[10]
+                "instructor": b[9] or "",
+                "last_booked_date": b[10] or ""
             })
         return jsonify(booking_list), 200
     except Exception as e:
@@ -706,8 +706,8 @@ def get_all_auto_bookings() -> Tuple[Any, int]:
             "last_attempt_at": b["last_attempt_at"],
             "retry_count": b["retry_count"],
             "day_of_week": b["day_of_week"],
-            "instructor": b["instructor"],
-            "last_booked_date": b["last_booked_date"]
+            "instructor": b["instructor"] or "",
+            "last_booked_date": b["last_booked_date"] or ""
         })
     return jsonify(bookings_formatted), 200
 

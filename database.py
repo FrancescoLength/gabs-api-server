@@ -95,7 +95,7 @@ def add_auto_booking(username: str, class_name: str, target_time: str, day_of_we
 def get_pending_auto_bookings() -> List[Tuple]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM auto_bookings WHERE status = 'pending'")
+    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date FROM auto_bookings WHERE status = 'pending'")
     bookings = cursor.fetchall()
     conn.close()
     return bookings
@@ -134,7 +134,7 @@ def update_auto_booking_status(booking_id: int, status: Optional[str] = None, la
 def get_auto_bookings_for_user(username: str) -> List[Tuple]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM auto_bookings WHERE username = ?", (username,))
+    cursor.execute("SELECT id, username, class_name, target_time, status, created_at, last_attempt_at, retry_count, day_of_week, instructor, last_booked_date FROM auto_bookings WHERE username = ?", (username,))
     bookings = cursor.fetchall()
     conn.close()
     return bookings
