@@ -63,19 +63,29 @@ def test_send_cancellation_reminders_flow(memory_db, mocker):
 
 def test_reset_failed_bookings_flow(memory_db):
     # 1. Setup
-    booking_id = database.add_auto_booking("test_user", "Test Class", "10:00", "Monday", "Test Instructor")
+    # Booking 1: Failed and old (should be reset)
+    booking_id_failed = database.add_auto_booking("test_user", "Test Class", "10:00", "Monday", "Test Instructor")
     one_day_ago = int((datetime.now() - timedelta(hours=25)).timestamp())
-    database.update_auto_booking_status(booking_id, "failed", last_attempt_at=one_day_ago)
+    database.update_auto_booking_status(booking_id_failed, "failed", last_attempt_at=one_day_ago)
+
+    # Booking 2: In Progress (should be reset immediately)
+    booking_id_stuck = database.add_auto_booking("test_user", "Test Class 2", "12:00", "Tuesday", "Test Instructor")
+    database.update_auto_booking_status(booking_id_stuck, "in_progress")
+
+    # Booking 3: Failed but recent (should NOT be reset)
+    booking_id_recent_fail = database.add_auto_booking("test_user", "Test Class 3", "14:00", "Wednesday", "Test Instructor")
+    one_hour_ago = int((datetime.now() - timedelta(hours=1)).timestamp())
+    database.update_auto_booking_status(booking_id_recent_fail, "failed", last_attempt_at=one_hour_ago)
     
     # 2. Execute
-    # Call the function directly, without app context
-    failed_bookings = database.get_failed_auto_bookings()
-    now_timestamp = int(datetime.now().timestamp())
-    reset_threshold_seconds = 24 * 60 * 60
-    for booking_id, last_attempt_at in failed_bookings:
-        if last_attempt_at and (now_timestamp - last_attempt_at) > reset_threshold_seconds:
-            database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=None, retry_count=0)
+    reset_failed_bookings()
 
     # 3. Assert
-    updated_booking = database.get_auto_booking_by_id(booking_id)
-    assert updated_booking[4] == 'pending'
+    updated_booking_failed = database.get_auto_booking_by_id(booking_id_failed)
+    assert updated_booking_failed[4] == 'pending'
+
+    updated_booking_stuck = database.get_auto_booking_by_id(booking_id_stuck)
+    assert updated_booking_stuck[4] == 'pending'
+
+    updated_booking_recent = database.get_auto_booking_by_id(booking_id_recent_fail)
+    assert updated_booking_recent[4] == 'failed'

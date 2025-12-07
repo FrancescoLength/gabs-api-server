@@ -142,7 +142,7 @@ def process_auto_bookings():
 
             # Attempt to lock the booking before processing
             if not database.lock_auto_booking(booking_id):
-                logging.debug(f"Booking {booking_id} is already being processed by another thread. Skipping.")
+                logging.warning(f"Booking {booking_id} is already in 'in_progress' state or could not be locked. Skipping for now.")
                 continue
 
             try:
@@ -293,16 +293,20 @@ def send_cancellation_reminders():
 def reset_failed_bookings():
     with app.app_context():
         logging.info("Running reset_failed_bookings job.")
-        failed_bookings = database.get_failed_auto_bookings()
+        stuck_bookings = database.get_stuck_bookings()
         now_timestamp = int(datetime.now().timestamp())
         reset_threshold_seconds = 24 * 60 * 60  # 24 hours
 
-        for booking_id, last_attempt_at in failed_bookings:
-            if last_attempt_at and (now_timestamp - last_attempt_at) > reset_threshold_seconds:
-                logging.info(f"Resetting failed auto-booking ID {booking_id} to pending.")
+        for booking_id, last_attempt_at, status in stuck_bookings:
+            if status == 'in_progress':
+                logging.warning(f"Auto-booking ID {booking_id} found stuck in 'in_progress' state. Resetting to 'pending'.")
                 database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=None, retry_count=0)
-            else:
-                logging.debug(f"Failed auto-booking ID {booking_id} not yet eligible for reset.")
+            elif status == 'failed':
+                if last_attempt_at and (now_timestamp - last_attempt_at) > reset_threshold_seconds:
+                    logging.info(f"Resetting failed auto-booking ID {booking_id} to pending.")
+                    database.update_auto_booking_status(booking_id, 'pending', last_attempt_at=None, retry_count=0)
+                else:
+                    logging.debug(f"Failed auto-booking ID {booking_id} not yet eligible for reset.")
 
 def refresh_sessions():
     """

@@ -146,10 +146,10 @@ def cancel_auto_booking(booking_id, username):
     conn.close()
     return deleted_rows > 0
 
-def get_failed_auto_bookings():
+def get_stuck_bookings():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, last_attempt_at FROM auto_bookings WHERE status = 'failed'")
+    cursor.execute("SELECT id, last_attempt_at, status FROM auto_bookings WHERE status IN ('failed', 'in_progress')")
     bookings = cursor.fetchall()
     conn.close()
     return bookings

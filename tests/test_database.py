@@ -108,15 +108,20 @@ def test_delete_push_subscription(memory_db):
     subscriptions = database.get_push_subscriptions_for_user(username)
     assert len(subscriptions) == 0
 
-def test_get_failed_auto_bookings(memory_db):
+def test_get_stuck_bookings(memory_db):
     database.add_auto_booking("test_user", "Test Class", "10:00", "Monday", "Test Instructor")
-    booking_id = database.add_auto_booking("test_user", "Test Class 2", "12:00", "Tuesday", "Test Instructor 2")
-    database.update_auto_booking_status(booking_id, "failed")
+    booking_id_failed = database.add_auto_booking("test_user", "Test Class 2", "12:00", "Tuesday", "Test Instructor 2")
+    database.update_auto_booking_status(booking_id_failed, "failed")
+    
+    booking_id_in_progress = database.add_auto_booking("test_user", "Test Class 3", "14:00", "Wednesday", "Test Instructor 3")
+    database.update_auto_booking_status(booking_id_in_progress, "in_progress")
 
-    failed_bookings = database.get_failed_auto_bookings()
+    stuck_bookings = database.get_stuck_bookings()
 
-    assert len(failed_bookings) == 1
-    assert failed_bookings[0][0] == booking_id
+    assert len(stuck_bookings) == 2
+    statuses = [b[2] for b in stuck_bookings]
+    assert "failed" in statuses
+    assert "in_progress" in statuses
 
 def test_save_and_load_session(memory_db):
     username = "test_user"
