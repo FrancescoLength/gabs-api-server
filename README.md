@@ -12,16 +12,16 @@ This Flask-based API server empowers users to seamlessly interact with a famous 
 -   **Automated Recurring Bookings:** Schedule and manage recurring auto-bookings for your favorite classes. The scheduler runs in a dedicated process to ensure time-critical bookings are handled with high precision and concurrency.
 -   **Intelligent Push Notifications:** Receive timely push notifications, including crucial cancellation reminders.
 -   **Admin Panel:** Dedicated endpoints for administrators to monitor logs, auto-bookings, push subscriptions, and server status.
+-   **Automatic API Documentation:** Interactive Swagger UI documentation available at `/apidocs`.
 
 ## Credential Management and Security
 
 The GABS API Server prioritizes the security of user credentials. The system employs robust measures to handle sensitive information:
 
-*   **Encrypted Storage:** User passwords are never stored in plaintext. Instead, they are securely encrypted using a strong symmetric encryption scheme (Fernet from the `cryptography` library) and persisted in the SQLite database. The encryption key (`ENCRYPTION_KEY`) is loaded from environment variables, ensuring it is not hardcoded within the codebase.
+*   **Encrypted Storage:** User passwords are never stored in plaintext. Instead, they are securely encrypted using a strong symmetric encryption scheme (Fernet from the `cryptography` library) and persisted in the SQLite database.
+*   **Environment Variables:** All sensitive keys (`ENCRYPTION_KEY`, `JWT_SECRET_KEY`, `VAPID_PRIVATE_KEY`) are strictly loaded from environment variables. **There are no fallback file-based keys.** This practice prevents sensitive data from being exposed in version control.
 *   **Secure Session Management:** Upon successful authentication, encrypted credentials are utilized to establish and maintain a secure session with the gym's website. Session-specific data (cookies, CSRF tokens) is securely stored in an encrypted format within the SQLite database. An in-memory cache is explicitly avoided to minimize RAM usage on resource-constrained devices. A proactive background job periodically refreshes these sessions to ensure they remain active, maximizing reliability for time-critical bookings.
 *   **Strict Access Control:** Encrypted user passwords can only be accessed and decrypted by the automated booking system when strictly necessary to perform booking or scraping operations on behalf of the user.
-*   **Environment Variable Best Practices:** All sensitive keys, including the `JWT_SECRET_KEY`, VAPID keys for push notifications, and the `ENCRYPTION_KEY`, are managed through environment variables (typically loaded from a `.env` file). This practice prevents sensitive data from being exposed in version control or directly within the application's source code.
-*   **Isolated Encryption Key:** The master `ENCRYPTION_KEY` is loaded from a dedicated `encryption.key` file, isolating it from other configuration variables. This file should have strict permissions (e.g., `chmod 600`) and be excluded from version control.
 *   **Rate Limiting:** The login endpoint is protected with rate limiting, mitigating the risk of brute-force password guessing attacks.
 
 ## Architecture Overview
@@ -39,8 +39,9 @@ The application is designed with a decoupled architecture to ensure stability an
 ## Setup and Installation
 
 1.  **Prerequisites:**
-    -   Python 3.8+
+    -   Python 3.12+
     -   Git
+    -   Docker & Docker Compose (Optional but recommended)
 
 2.  **Clone the Repository:**
     ```bash
@@ -48,22 +49,17 @@ The application is designed with a decoupled architecture to ensure stability an
     cd gabs_api_server
     ```
 
-3.  **Install Dependencies:**
-    ```bash
-    # (Recommended) Create and activate a virtual environment
-    python3 -m venv venv
-    source venv/bin/activate
-
-    # Install dependencies
-    pip install -r requirements.txt
-    ```
-
-4.  **Configuration (.env file):**
-    This project uses environment variables to manage sensitive information and configuration.
+3.  **Configuration (.env file):**
+    This project strictly uses environment variables.
     -   Create a file named `.env` in the root of the `gabs_api_server` directory.
-    -   Copy the content from `.env.example` and fill in the required values (e.g., `JWT_SECRET_KEY`, `VAPID_PRIVATE_KEY`, etc.).
+    -   Copy content from `.env.example` as a template.
+    -   **CRITICAL:** You MUST provide `ENCRYPTION_KEY` and `JWT_SECRET_KEY`. You can generate secure keys using Python:
+        ```python
+        from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())
+        import secrets; print(secrets.token_urlsafe(32))
+        ```
 
-5.  **Generate VAPID Keys (if needed):**
+4.  **Generate VAPID Keys (if needed):**
     If you need to generate new VAPID keys for push notifications, run the provided script:
     ```bash
     python generate_vapid_keys_manual.py
@@ -72,25 +68,33 @@ The application is designed with a decoupled architecture to ensure stability an
 
 ## Running the Server
 
-### Development (Local Testing)
+### Option A: Docker Deployment (Recommended)
 
-For local development, you need to run two separate processes in two different terminals.
-
-1.  **Terminal 1: Start the Scheduler**
+1.  **Build and Run:**
     ```bash
+    docker-compose up --build -d
+    ```
+    The API will be available at `http://localhost:5000`.
+
+### Option B: Manual Deployment (Local/Systemd)
+
+1.  **Install Dependencies:**
+    ```bash
+    # Create and activate a virtual environment
+    python3 -m venv venv
     source venv/bin/activate
-    python scheduler_runner.py
+
+    # Install dependencies
+    pip install -r requirements.txt
     ```
 
-2.  **Terminal 2: Start the Flask Development Server**
-    ```bash
-    source venv/bin/activate
-    python app.py
-    ```
+2.  **Running Locally:**
+    *   **Terminal 1 (Scheduler):** `python scheduler_runner.py`
+    *   **Terminal 2 (Web Server):** `python app.py` (or via Gunicorn)
 
-### Production Deployment (systemd)
+3.  **Production Deployment (systemd):**
 
-For a robust production deployment on a Linux system (like a Raspberry Pi), it is highly recommended to manage the Gunicorn web server, the scheduler, and the Ngrok tunnel as `systemd` services. This ensures they start automatically on boot and are restarted if they crash.
+For a robust production deployment on a Linux system (like a Raspberry Pi), it is highly recommended to manage the Gunicorn web server, the scheduler, and the Ngrok tunnel as `systemd` services.
 
 **1. Create the Service Files:**
 
@@ -147,36 +151,15 @@ WantedBy=multi-user.target
 ```
 *(Note: Ensure the `User`, `Group`, and paths in `WorkingDirectory` and `ExecStart` match your specific setup.)*
 
-**Deprecation Note:** Previously, `crontab` and `screen` sessions were used for managing background processes. This approach has been deprecated in favor of `systemd` services for improved reliability, automatic restarts, and centralized logging.
-
 **2. Enable and Start the Services:**
 
-After creating the files, run the following commands to enable and start the services:
-
 ```bash
-# Reload the systemd daemon to recognize the new files
+# Reload the systemd daemon
 sudo systemctl daemon-reload
 
-# Enable the services to start on boot
-sudo systemctl enable gabs-api.service
-sudo systemctl enable gabs-scheduler.service
-sudo systemctl enable gabs-ngrok.service
-
-# Start the services immediately
-sudo systemctl start gabs-api.service
-sudo systemctl start gabs-scheduler.service
-sudo systemctl start gabs-ngrok.service
+# Enable and start services
+sudo systemctl enable --now gabs-api.service gabs-scheduler.service gabs-ngrok.service
 ```
-
-**3. Managing the Services:**
-
-You can now manage the application using standard `systemctl` commands:
--   **Check Status:** `sudo systemctl status gabs-api`, `sudo systemctl status gabs-scheduler`, `sudo systemctl status gabs-ngrok`
--   **Stop:** `sudo systemctl stop gabs-api`
--   **Start:** `sudo systemctl start gabs-api`
--   **Restart:** `sudo systemctl restart gabs-api`
--   **View Logs:** `sudo journalctl -u gabs-api` or `sudo journalctl -u gabs-scheduler -f` (to follow the logs)
-
 
 ## Testing
 
@@ -194,40 +177,47 @@ The test suite currently includes over 40 tests, providing good coverage of the 
 
 ### Test Coverage Report
 
-Overall test coverage: **63%**
+Overall test coverage: **94%**
 
-| File                            | Statements | Miss | Cover |
-| :------------------------------ | :--------- | :--- | :---- |
-| `app.py`                        | 489        | 245  | 50%   |
-| `config.py`                     | 18         | 2    | 89%   |
-| `crypto.py`                     | 13         | 8    | 38%   |
-| `database.py`                   | 236        | 29   | 88%   |
-| `generate_encryption_key.py`    | 8          | 8    | 0%    |
-| `generate_vapid_keys_manual.py` | 15         | 15   | 0%    |
-| `logging_config.py`             | 25         | 2    | 92%   |
-| `scheduler_runner.py`           | 28         | 28   | 0%    |
-| `scraper.py`                    | 330        | 212  | 36%   |
-| `tests/conftest.py`             | 24         | 0    | 100%  |
-| `tests/test_app.py`             | 32         | 0    | 100%  |
-| `tests/test_app_integration.py` | 33         | 0    | 100%  |
-| `tests/test_database.py`        | 174        | 3    | 98%   |
-| `tests/test_scheduler_jobs.py`  | 49         | 0    | 100%  |
-| `tests/test_scraper.py`         | 33         | 0    | 100%  |
-| **TOTAL**                       | **1507**   | **552**| **63%** |
+| File                                               | Statements | Missing | Coverage |
+| :------------------------------------------------- | :--------- | :------ | :------- |
+| `gabs_api_server/app.py`                           | 438        | 12      | 97%      |
+| `gabs_api_server/config.py`                        | 20         | 7       | 65%      |
+| `gabs_api_server/crypto.py`                        | 16         | 2       | 88%      |
+| `gabs_api_server/database.py`                      | 257        | 36      | 86%      |
+| `gabs_api_server/generate_encryption_key.py`       | 8          | 8       | 0%       |
+| `gabs_api_server/generate_vapid_keys_manual.py`    | 14         | 14      | 0%       |
+| `gabs_api_server/logging_config.py`                | 25         | 0       | 100%     |
+| `gabs_api_server/scheduler_runner.py`              | 49         | 7       | 86%      |
+| `gabs_api_server/scraper.py`                       | 347        | 50      | 86%      |
+| `gabs_api_server/services/auto_booking_service.py` | 115        | 22      | 81%      |
+| `gabs_api_server/tests/conftest.py`                | 27         | 0       | 100%     |
+| `gabs_api_server/tests/test_app.py`                | 31         | 0       | 100%     |
+| `gabs_api_server/tests/test_app_endpoints.py`      | 116        | 0       | 100%     |
+| `gabs_api_server/tests/test_app_integration.py`    | 195        | 0       | 100%     |
+| `gabs_api_server/tests/test_app_more_units.py`     | 101        | 0       | 100%     |
+| `gabs_api_server/tests/test_app_units.py`          | 122        | 1       | 99%      |
+| `gabs_api_server/tests/test_auto_booking_service.py`| 140        | 0       | 100%     |
+| `gabs_api_server/tests/test_crypto.py`             | 29         | 0       | 100%     |
+| `gabs_api_server/tests/test_database.py`           | 192        | 3       | 98%      |
+| `gabs_api_server/tests/test_scheduler_jobs.py`     | 178        | 0       | 100%     |
+| `gabs_api_server/tests/test_scheduler_runner.py`   | 29         | 0       | 100%     |
+| `gabs_api_server/tests/test_scraper.py`            | 253        | 0       | 100%     |
+| **TOTAL**                                          | **2702**   | **162** | **94%**  |
 
 ### Running the Tests
-
-To run the tests, navigate to the `gabs_api_server` directory and run the following command:
-
 ```bash
-PYTHONPATH=. pytest
+PYTHONPATH=. pytest --cov=gabs_api_server gabs_api_server/tests/
 ```
 
-This command will discover and run all the tests in the `tests/` directory.
+### CI/CD
+A GitHub Actions workflow (`.github/workflows/test.yml`) automatically runs linting and tests on every push to the `main` branch.
 
 ## API Endpoints Documentation
 
-All endpoints (except `/api/login` and `/api/vapid-public-key`) require an `Authorization: Bearer <token>` header to be sent with the request.
+Interactive API documentation is available via Swagger UI at `/apidocs`.
+
+All endpoints (except `/api/login` and `/api/vapid-public-key`) require an `Authorization: Bearer <token>` header.
 
 ---
 
@@ -282,7 +272,7 @@ Books a class or joins the waiting list if the class is full.
     ```
 -   **Example `curl` Request:**
     ```bash
-    curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"class_name":"Calorie Killer", "date":"2025-10-06"}' http://127.0.0.1:5000/api/book
+    curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"class_name":"Calorie Killer", "date":"2025-10-06", "time":"10:00"}' http://127.0.0.1:5000/api/book
     ```
 
 #### `POST /api/cancel`
