@@ -353,8 +353,12 @@ def test_get_my_bookings_success(scraper_mock, mocker):
     assert bookings[1]['status'] == "Waiting List"
 
 def test_get_my_bookings_redirect_login(scraper_mock, mocker):
+    # Mock LOGIN_URL to match our mock response URL
+    mocker.patch('gabs_api_server.scraper.LOGIN_URL', "http://base/login")
+    
     mock_response = MagicMock()
     mock_response.url = "http://base/login" # Redirected
+    mock_response.text = "<html>Login Page</html>" # Set text to avoid BS4 TypeError
     scraper_mock.session.get.return_value = mock_response
     
     # Mock _login so handle_session_expiry can call it

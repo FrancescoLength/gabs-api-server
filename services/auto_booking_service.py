@@ -13,10 +13,14 @@ import queue # Added this import
 # import config
 # from scraper import SessionExpiredError
 
-# Relative imports from within gabs_api_server package
-from .. import database
-from .. import config
-from ..scraper import Scraper, SessionExpiredError
+try:
+    from .. import database
+    from .. import config
+    from ..scraper import Scraper, SessionExpiredError
+except ImportError:
+    import database
+    import config
+    from scraper import Scraper, SessionExpiredError
 
 logger = logging.getLogger(__name__)
 

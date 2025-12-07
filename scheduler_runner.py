@@ -7,12 +7,16 @@ import signal
 import sys
 from typing import Dict, Any
 
-# Import the app object and job functions from the main application file.
-from .app import send_cancellation_reminders, reset_failed_bookings, refresh_sessions, app, debug_writer_queue, get_scraper_instance, handle_session_expiration
-from . import database
-from .services.auto_booking_service import process_auto_bookings_job
-
-from .logging_config import setup_logging
+try:
+    from .app import send_cancellation_reminders, reset_failed_bookings, refresh_sessions, app, debug_writer_queue, get_scraper_instance, handle_session_expiration
+    from . import database
+    from .services.auto_booking_service import process_auto_bookings_job
+    from .logging_config import setup_logging
+except ImportError:
+    from app import send_cancellation_reminders, reset_failed_bookings, refresh_sessions, app, debug_writer_queue, get_scraper_instance, handle_session_expiration
+    import database
+    from services.auto_booking_service import process_auto_bookings_job
+    from logging_config import setup_logging
 
 # Configure logging
 setup_logging()

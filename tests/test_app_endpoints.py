@@ -1,8 +1,7 @@
 import pytest
 from flask import jsonify
-from gabs_api_server.app import app
+from gabs_api_server.app import app, sync_live_bookings
 from gabs_api_server import database
-import gabs_api_server # Import the package for referencing in assertions
 
 @pytest.fixture
 def client(mocker):
@@ -120,23 +119,23 @@ def test_cancel_booking_success(client, auth_headers, mocker):
     mock_scraper = mocker.Mock()
     mock_scraper.find_and_cancel_booking.return_value = {'status': 'success'}
     mocker.patch('gabs_api_server.app.get_scraper_instance', return_value=mock_scraper)
-    mocker.patch('gabs_api_server.database.delete_live_booking')
+    mock_delete = mocker.patch('gabs_api_server.database.delete_live_booking')
     
     data = {'class_name': 'C', 'date': 'D', 'time': 'T'}
     response = client.post('/api/cancel', headers=auth_headers, json=data)
     assert response.status_code == 200
-    gabs_api_server.database.delete_live_booking.assert_called()
+    mock_delete.assert_called()
 
 def test_cancel_booking_failure(client, auth_headers, mocker):
     mock_scraper = mocker.Mock()
     mock_scraper.find_and_cancel_booking.return_value = {'status': 'error'}
     mocker.patch('gabs_api_server.app.get_scraper_instance', return_value=mock_scraper)
-    mocker.patch('gabs_api_server.database.delete_live_booking')
+    mock_delete = mocker.patch('gabs_api_server.database.delete_live_booking')
     
     data = {'class_name': 'C', 'date': 'D', 'time': 'T'}
     response = client.post('/api/cancel', headers=auth_headers, json=data)
     assert response.status_code == 200
-    gabs_api_server.database.delete_live_booking.assert_not_called()
+    mock_delete.assert_not_called()
 
 def test_cancel_booking_missing_params(client, auth_headers):
     response = client.post('/api/cancel', headers=auth_headers, json={})
@@ -146,9 +145,9 @@ def test_get_my_bookings_success(client, auth_headers, mocker):
     mock_scraper = mocker.Mock()
     mock_scraper.get_my_bookings.return_value = []
     mocker.patch('gabs_api_server.app.get_scraper_instance', return_value=mock_scraper)
-    mocker.patch('gabs_api_server.app.sync_live_bookings')
+    mock_sync = mocker.patch('gabs_api_server.app.sync_live_bookings')
     mocker.patch('gabs_api_server.database.touch_session')
     
     response = client.get('/api/bookings', headers=auth_headers)
     assert response.status_code == 200
-    gabs_api_server.app.sync_live_bookings.assert_called()
+    mock_sync.assert_called()

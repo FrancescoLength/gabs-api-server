@@ -16,19 +16,25 @@ from typing import List, Optional, Tuple, Any, Dict, Union, Callable
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager, verify_jwt_in_request
 from flasgger import Swagger
 
-from .scraper import Scraper, SessionExpiredError
-from . import config
-from . import database
-from . import crypto
-from pywebpush import webpush
+try:
+    from .scraper import Scraper, SessionExpiredError
+    from . import config
+    from . import database
+    from . import crypto
+    from .services import auto_booking_service
+    from .logging_config import setup_logging, LOG_FILE
+except ImportError:
+    from scraper import Scraper, SessionExpiredError
+    import config
+    import database
+    import crypto
+    from services import auto_booking_service
+    from logging_config import setup_logging, LOG_FILE
 
-# Import the new auto_booking_service
-from .services import auto_booking_service
+from pywebpush import webpush
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-
-from .logging_config import setup_logging, LOG_FILE
 
 # Configure logging
 setup_logging()
