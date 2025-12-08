@@ -168,11 +168,12 @@ def lock_auto_booking(booking_id: int) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("BEGIN EXCLUSIVE")
+        cursor.execute("BEGIN IMMEDIATE")
         cursor.execute("SELECT status FROM auto_bookings WHERE id = ?", (booking_id,))
         result = cursor.fetchone()
         if result and result[0] == 'pending':
-            cursor.execute("UPDATE auto_bookings SET status = 'in_progress' WHERE id = ?", (booking_id,))
+            last_attempt_at = int(datetime.now().timestamp())
+            cursor.execute("UPDATE auto_bookings SET status = 'in_progress', last_attempt_at = ? WHERE id = ?", (last_attempt_at, booking_id))
             conn.commit()
             return True
         conn.commit() # or rollback
