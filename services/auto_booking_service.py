@@ -136,9 +136,18 @@ def process_auto_bookings_job(
                 # Attempt to book the class
                 user_scraper = get_scraper_instance_func(username)
                 if not user_scraper:
-                    logger.warning(f"Scraper session for {username} not found for auto-booking {booking_id}. Re-login required.")
+                    logger.warning(f"Scraper session for {username} not found for auto-booking {booking_id}. Retrying on next cycle.")
                     new_retry_count = (retry_count or 0) + 1 # Increment retry_count
-                    database.update_auto_booking_status(booking_id, 'failed', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count) # Pass incremented retry_count
+                    
+                    if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:
+                         database.update_auto_booking_status(
+                            booking_id, 'pending', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count
+                        )
+                    else:
+                        database.update_auto_booking_status(
+                            booking_id, 'failed', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count
+                        )
+                        logger.error(f"Scraper session for {username} not found after {new_retry_count} attempts. Marking auto-booking {booking_id} as failed.")
                     continue
 
                 logger.info(

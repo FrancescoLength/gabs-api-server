@@ -16,3 +16,4 @@ encryption.key
 auto_bookings.db
 gabs_api.log
 .coverage
+auto_bookings.db.bak
