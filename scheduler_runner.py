@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 scheduler = None
 
 def graceful_shutdown(signum, frame):
-    global scheduler
+
     logger.info(f"Scheduler received signal {signum}. Shutting down gracefully...")
     if scheduler:
         scheduler.shutdown()
