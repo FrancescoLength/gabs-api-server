@@ -17,7 +17,8 @@ ENCRYPTION_KEY: str | None = os.getenv("ENCRYPTION_KEY")
 if not ENCRYPTION_KEY:
     # Fallback for legacy file support, but prioritize ENV.
     # This path should be deprecated in future versions.
-    ENCRYPTION_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'encryption.key')
+    ENCRYPTION_KEY_FILE = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), 'encryption.key')
     try:
         with open(ENCRYPTION_KEY_FILE, 'r') as f:
             ENCRYPTION_KEY = f.read().strip()
@@ -25,7 +26,8 @@ if not ENCRYPTION_KEY:
         pass
 
 if not ENCRYPTION_KEY:
-    raise RuntimeError("CRITICAL: ENCRYPTION_KEY not found in environment variables.")
+    raise RuntimeError(
+        "CRITICAL: ENCRYPTION_KEY not found in environment variables.")
 
 # Email dell'amministratore
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")

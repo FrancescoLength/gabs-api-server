@@ -3,8 +3,10 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat,
 from cryptography.hazmat.backends import default_backend
 import base64
 
+
 def urlsafe_base64_encode(data):
     return base64.urlsafe_b64encode(data).decode('utf-8').rstrip('=')
+
 
 # Generate a new private key
 private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
