@@ -179,39 +179,50 @@ The test suite currently includes over 40 tests, providing good coverage of the 
 
 Overall test coverage: **94%**
 
-| File                                               | Statements | Missing | Coverage |
-| :------------------------------------------------- | :--------- | :------ | :------- |
-| `gabs_api_server/app.py`                           | 438        | 12      | 97%      |
-| `gabs_api_server/config.py`                        | 20         | 7       | 65%      |
-| `gabs_api_server/crypto.py`                        | 16         | 2       | 88%      |
-| `gabs_api_server/database.py`                      | 257        | 36      | 86%      |
-| `gabs_api_server/generate_encryption_key.py`       | 8          | 8       | 0%       |
-| `gabs_api_server/generate_vapid_keys_manual.py`    | 14         | 14      | 0%       |
-| `gabs_api_server/logging_config.py`                | 25         | 0       | 100%     |
-| `gabs_api_server/scheduler_runner.py`              | 49         | 7       | 86%      |
-| `gabs_api_server/scraper.py`                       | 347        | 50      | 86%      |
-| `gabs_api_server/services/auto_booking_service.py` | 115        | 22      | 81%      |
-| `gabs_api_server/tests/conftest.py`                | 27         | 0       | 100%     |
-| `gabs_api_server/tests/test_app.py`                | 31         | 0       | 100%     |
-| `gabs_api_server/tests/test_app_endpoints.py`      | 116        | 0       | 100%     |
-| `gabs_api_server/tests/test_app_integration.py`    | 195        | 0       | 100%     |
-| `gabs_api_server/tests/test_app_more_units.py`     | 101        | 0       | 100%     |
-| `gabs_api_server/tests/test_app_units.py`          | 122        | 1       | 99%      |
-| `gabs_api_server/tests/test_auto_booking_service.py`| 140        | 0       | 100%     |
-| `gabs_api_server/tests/test_crypto.py`             | 29         | 0       | 100%     |
-| `gabs_api_server/tests/test_database.py`           | 192        | 3       | 98%      |
-| `gabs_api_server/tests/test_scheduler_jobs.py`     | 178        | 0       | 100%     |
-| `gabs_api_server/tests/test_scheduler_runner.py`   | 29         | 0       | 100%     |
-| `gabs_api_server/tests/test_scraper.py`            | 253        | 0       | 100%     |
-| **TOTAL**                                          | **2702**   | **162** | **94%**  |
+| File                                                 | Statements | Missing | Coverage |
+| :--------------------------------------------------- | :--------- | :------ | :------- |
+| `gabs_api_server/app.py`                             | 438        | 12      | 97%      |
+| `gabs_api_server/config.py`                          | 20         | 7       | 65%      |
+| `gabs_api_server/crypto.py`                          | 16         | 2       | 88%      |
+| `gabs_api_server/database.py`                        | 257        | 36      | 86%      |
+| `gabs_api_server/generate_encryption_key.py`         | 8          | 8       | 0%       |
+| `gabs_api_server/generate_vapid_keys_manual.py`      | 14         | 14      | 0%       |
+| `gabs_api_server/logging_config.py`                  | 25         | 0       | 100%     |
+| `gabs_api_server/scheduler_runner.py`                | 49         | 7       | 86%      |
+| `gabs_api_server/scraper.py`                         | 347        | 50      | 86%      |
+| `gabs_api_server/services/auto_booking_service.py`   | 115        | 22      | 81%      |
+| `gabs_api_server/tests/conftest.py`                  | 27         | 0       | 100%     |
+| `gabs_api_server/tests/test_app.py`                  | 31         | 0       | 100%     |
+| `gabs_api_server/tests/test_app_endpoints.py`        | 116        | 0       | 100%     |
+| `gabs_api_server/tests/test_app_integration.py`      | 195        | 0       | 100%     |
+| `gabs_api_server/tests/test_app_more_units.py`       | 101        | 0       | 100%     |
+| `gabs_api_server/tests/test_app_units.py`            | 122        | 1       | 99%      |
+| `gabs_api_server/tests/test_auto_booking_service.py` | 140        | 0       | 100%     |
+| `gabs_api_server/tests/test_crypto.py`               | 29         | 0       | 100%     |
+| `gabs_api_server/tests/test_database.py`             | 192        | 3       | 98%      |
+| `gabs_api_server/tests/test_scheduler_jobs.py`       | 178        | 0       | 100%     |
+| `gabs_api_server/tests/test_scheduler_runner.py`     | 29         | 0       | 100%     |
+| `gabs_api_server/tests/test_scraper.py`              | 253        | 0       | 100%     |
+| **TOTAL**                                            | **2702**   | **162** | **94%**  |
 
 ### Running the Tests
 ```bash
 PYTHONPATH=. pytest --cov=gabs_api_server gabs_api_server/tests/
 ```
 
-### CI/CD
-A GitHub Actions workflow (`.github/workflows/test.yml`) automatically runs linting and tests on every push to the `main` branch.
+### CI/CD Pipeline
+A GitHub Actions workflow (`.github/workflows/test.yml`) ensures code quality on every contribution.
+
+-   **Triggers**: Runs on `push` and `pull_request` to `main` or `master` branches.
+-   **Linting**: Uses `flake8` to enforce style guidelines and catch syntax errors.
+-   **Testing**: Executes the full `pytest` suite with coverage reporting.
+
+### Deployment (Raspberry Pi)
+Unlike the frontend, the backend does not deployed automatically via CI (due to the on-premise nature of the Raspberry Pi).
+**Recommended Deployment Workflow:**
+1.  **CI Validation**: Ensure the GitHub Actions workflow passes.
+2.  **Pull Updates**: On the Raspberry Pi, run `git pull`.
+3.  **Restart Services**: `docker-compose up -d --build` or `sudo systemctl restart gabs-api`.
 
 ## API Endpoints Documentation
 
