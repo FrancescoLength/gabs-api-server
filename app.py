@@ -74,7 +74,8 @@ def debug_file_writer() -> None:
             # Wait indefinitely for an item
             filepath, content = debug_writer_queue.get()
 
-            # A None item is the signal to stop (for graceful shutdown, not used with daemon)
+            # A None item is the signal to stop (for graceful shutdown, not
+            # used with daemon)
             if filepath is None:  # type: ignore
                 break
 
@@ -93,7 +94,9 @@ writer_thread.start()
 
 # --- Session Management ---
 
-def get_scraper_instance(username: str, password: Optional[str] = None) -> Optional[Scraper]:
+def get_scraper_instance(
+        username: str,
+        password: Optional[str] = None) -> Optional[Scraper]:
     """
     Gets a scraper instance for a user by loading their session from the database
     or creating a new one if in a login flow.
@@ -123,7 +126,8 @@ def get_scraper_instance(username: str, password: Optional[str] = None) -> Optio
             scraper = Scraper(username, password_to_use,
                               session_data=session_data)
             # The session is not saved here to avoid writing to DB on every request.
-            # Session saving is handled by the login flow and the refresh_sessions job.
+            # Session saving is handled by the login flow and the
+            # refresh_sessions job.
             return scraper
         except Exception as e:
             logging.error(f"Failed to restore session for {username}: {e}")
@@ -186,11 +190,17 @@ def send_cancellation_reminders() -> None:
 
             time_until_class: timedelta = class_datetime - now
 
-            # Define the reminder window: exactly 3 hours and 30 minutes before the class
+            # Define the reminder window: exactly 3 hours and 30 minutes before
+            # the class
 
             # Check if current time is within a small window around the reminder_threshold
-            # To avoid missing the exact second, we check a small interval, e.g., +/- 1 minute
-            if timedelta(hours=3, minutes=25) <= time_until_class <= timedelta(hours=3, minutes=35):
+            # To avoid missing the exact second, we check a small interval,
+            # e.g., +/- 1 minute
+            if timedelta(
+                    hours=3,
+                    minutes=25) <= time_until_class <= timedelta(
+                    hours=3,
+                    minutes=35):
                 logging.info(
                     f"Sending cancellation reminder for live booking ID {booking_id} for user {username}.")
                 subscriptions: List[Dict[str, Any]] = database.get_push_subscriptions_for_user(
@@ -229,7 +239,8 @@ def send_cancellation_reminders() -> None:
                                 database.delete_push_subscription(
                                     sub['endpoint'])
                                 logging.info(
-                                    f"Deleted invalid push subscription for user {username}: {sub['endpoint']}")
+                                    f"Deleted invalid push subscription for user {username}: {
+                                        sub['endpoint']}")
                 else:
                     logging.info(
                         f"No push subscriptions found for {username} for live booking ID {booking_id}. "
@@ -258,7 +269,8 @@ def reset_failed_bookings() -> None:
                     booking_id, 'pending', last_attempt_at=None, retry_count=0)
             elif status == 'failed':
                 # type: ignore
-                if last_attempt_at and (now_timestamp - last_attempt_at) > reset_threshold_seconds:
+                if last_attempt_at and (
+                        now_timestamp - last_attempt_at) > reset_threshold_seconds:
                     logging.info(
                         f"Resetting failed auto-booking ID {booking_id} to pending.")
                     database.update_auto_booking_status(
@@ -283,7 +295,8 @@ def refresh_sessions() -> None:
             try:
                 scraper: Optional[Scraper] = get_scraper_instance(username)
                 if scraper:
-                    # Perform a lightweight, safe operation to check session validity
+                    # Perform a lightweight, safe operation to check session
+                    # validity
                     bookings: List[Dict[str, Any]] = scraper.get_my_bookings()
                     # Session is valid, so we touch the timestamp
                     database.touch_session(username)
@@ -294,7 +307,8 @@ def refresh_sessions() -> None:
                     logging.warning(
                         f"Could not get scraper instance for {username} during session refresh.")
             except SessionExpiredError:
-                # The decorator on the scraper method already handled the re-login
+                # The decorator on the scraper method already handled the
+                # re-login
                 logging.info(
                     f"Session for {username} was expired and has been refreshed by the scraper.")
             except Exception as e:
@@ -400,18 +414,22 @@ def scraper_endpoint(f: Callable) -> Callable:
             user_scraper: Optional[Scraper] = get_scraper_instance(
                 current_user)
             if not user_scraper:
-                return jsonify({"error": "Session not found. Please log in again."}), 401
+                return jsonify(
+                    {"error": "Session not found. Please log in again."}), 401
             return f(user_scraper, *args, **kwargs)
         except SessionExpiredError:
             # This is now the primary failure point if a session is truly expired and couldn't be revived.
             # The handle_session_expiration function is called, which just logs the issue.
-            # We then return a 401 to force the user to log in again via the client.
+            # We then return a 401 to force the user to log in again via the
+            # client.
             handle_session_expiration(current_user)
-            return jsonify({"error": "Your session has expired. Please log in again."}), 401
+            return jsonify(
+                {"error": "Your session has expired. Please log in again."}), 401
         except Exception as e:
             logging.error(
                 f"Unhandled error in scraper endpoint for user {current_user}: {e}")
-            return jsonify({"error": "An internal server error occurred."}), 500
+            return jsonify(
+                {"error": "An internal server error occurred."}), 500
     return decorated_function
 
 
@@ -478,10 +496,12 @@ def book_class(user_scraper: Scraper) -> Tuple[Any, int]:
     target_date: Optional[str] = data.get('date')
     target_time: Optional[str] = data.get('time')
     if not all([class_name, target_date, target_time]):
-        return jsonify({"error": "class_name, date, and time are required."}), 400
+        return jsonify(
+            {"error": "class_name, date, and time are required."}), 400
 
     logging.info(
-        f"User {user_scraper.username} attempting to book class {class_name} on {target_date} at {target_time}")
+        f"User {
+            user_scraper.username} attempting to book class {class_name} on {target_date} at {target_time}")
     result: Dict[str, Any] = user_scraper.find_and_book_class(  # type: ignore
         target_date_str=target_date,  # type: ignore
         class_name=class_name,  # type: ignore
@@ -498,19 +518,25 @@ def cancel_booking(user_scraper: Scraper) -> Tuple[Any, int]:
     target_date: Optional[str] = data.get('date')
     target_time: Optional[str] = data.get('time')
     if not class_name or not target_date or not target_time:
-        return jsonify({"error": "class_name, date, and time are required."}), 400
+        return jsonify(
+            {"error": "class_name, date, and time are required."}), 400
 
     logging.info(
-        f"User {user_scraper.username} attempting to cancel class {class_name} on {target_date} at {target_time}")
+        f"User {
+            user_scraper.username} attempting to cancel class {class_name} on {target_date} at {target_time}")
     result: Dict[str, Any] = user_scraper.find_and_cancel_booking(
         class_name, target_date, target_time)  # type: ignore
 
     if result.get('status') == 'success':
         database.delete_live_booking(
-            user_scraper.username, class_name, target_date, target_time)  # type: ignore
+            user_scraper.username,
+            class_name,
+            target_date,
+            target_time)  # type: ignore
         # type: ignore
         logging.info(
-            f"Deleted live booking for {user_scraper.username}: {class_name} on {target_date} at {target_time} from database.")
+            f"Deleted live booking for {
+                user_scraper.username}: {class_name} on {target_date} at {target_time} from database.")
 
     return jsonify(result), 200
 
@@ -538,7 +564,8 @@ def get_my_bookings(user_scraper: Scraper) -> Tuple[Any, int]:
     return jsonify(bookings), 200
 
 
-def sync_live_bookings(username: str, scraped_bookings: List[Dict[str, Any]]) -> None:
+def sync_live_bookings(
+        username: str, scraped_bookings: List[Dict[str, Any]]) -> None:
     """
     Synchronizes the live_bookings table for a user with a fresh list of scraped bookings.
     """
@@ -613,9 +640,14 @@ def sync_live_bookings(username: str, scraped_bookings: List[Dict[str, Any]]) ->
         instructor: Optional[str] = full_booking.get(
             'instructor') if full_booking else None
 
-        if not database.live_booking_exists(username, class_name_original, class_date, class_time):
+        if not database.live_booking_exists(
+                username, class_name_original, class_date, class_time):
             database.add_live_booking(
-                username, class_name_original, class_date, class_time, instructor)
+                username,
+                class_name_original,
+                class_date,
+                class_time,
+                instructor)
             logging.info(
                 f"Added live booking for {username}: {class_name_original} on {class_date} at {class_time} to database.")
 
@@ -655,7 +687,8 @@ def schedule_auto_book() -> Tuple[Any, int]:
     instructor: Optional[str] = data.get('instructor')
 
     if not all([class_name, target_time_str, day_of_week, instructor]):
-        return jsonify({"error": "class_name, time, day_of_week, and instructor are required."}), 400
+        return jsonify(
+            {"error": "class_name, time, day_of_week, and instructor are required."}), 400
 
     try:
         booking_id: int = database.add_auto_booking(
@@ -664,11 +697,13 @@ def schedule_auto_book() -> Tuple[Any, int]:
         logging.info(
             f"Recurring auto-booking scheduled for user {current_user}: Class {class_name} "
             f"on {day_of_week} at {target_time_str}. Booking ID: {booking_id}")
-        return jsonify({"message": "Recurring auto-booking scheduled successfully!", "booking_id": booking_id}), 201
+        return jsonify(
+            {"message": "Recurring auto-booking scheduled successfully!", "booking_id": booking_id}), 201
     except Exception as e:
         logging.error(
             f"Error scheduling auto-booking for user {current_user}: {e}")
-        return jsonify({"error": "An internal server error occurred. Contact Administrator."}), 500
+        return jsonify(
+            {"error": "An internal server error occurred. Contact Administrator."}), 500
 
 
 @app.route('/api/auto_bookings', methods=['GET'])
@@ -714,9 +749,11 @@ def cancel_auto_book() -> Tuple[Any, int]:
         if database.cancel_auto_booking(booking_id, current_user):
             logging.info(
                 f"Auto-booking ID {booking_id} cancelled by user {current_user}.")
-            return jsonify({"message": "Recurring auto-booking cancelled successfully!"}), 200
+            return jsonify(
+                {"message": "Recurring auto-booking cancelled successfully!"}), 200
         else:
-            return jsonify({"error": "Booking not found or not authorized to cancel. Contact Administrator"}), 404
+            return jsonify(
+                {"error": "Booking not found or not authorized to cancel. Contact Administrator"}), 404
     except Exception as e:
         logging.error(
             f"Error cancelling auto-booking ID {booking_id} for user {current_user}: {e}")
@@ -779,7 +816,8 @@ def get_logs() -> Tuple[Any, int]:
                         "message": match.group(3)
                     })
                 elif line.strip():
-                    if parsed_logs and parsed_logs[-1]['level'] in ['RAW', 'RAW_MULTI']:
+                    if parsed_logs and parsed_logs[-1]['level'] in [
+                            'RAW', 'RAW_MULTI']:
                         parsed_logs[-1]['message'] += '\n' + line.strip()
                     else:
                         parsed_logs.append({

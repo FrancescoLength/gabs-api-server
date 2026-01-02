@@ -9,17 +9,25 @@ from typing import Dict
 
 try:
     from .app import (
-        send_cancellation_reminders, reset_failed_bookings, refresh_sessions, app,
-        debug_writer_queue, get_scraper_instance, handle_session_expiration
-    )
+        send_cancellation_reminders,
+        reset_failed_bookings,
+        refresh_sessions,
+        app,
+        debug_writer_queue,
+        get_scraper_instance,
+        handle_session_expiration)
     from . import database
     from .services.auto_booking_service import process_auto_bookings_job
     from .logging_config import setup_logging
 except ImportError:
     from app import (
-        send_cancellation_reminders, reset_failed_bookings, refresh_sessions, app,
-        debug_writer_queue, get_scraper_instance, handle_session_expiration
-    )
+        send_cancellation_reminders,
+        reset_failed_bookings,
+        refresh_sessions,
+        app,
+        debug_writer_queue,
+        get_scraper_instance,
+        handle_session_expiration)
     import database
     from services.auto_booking_service import process_auto_bookings_job
     from logging_config import setup_logging
@@ -58,9 +66,8 @@ def run_scheduler():
     global scheduler
     logger.info("Starting standalone scheduler process...")
 
-    jobstores: Dict[str, SQLAlchemyJobStore] = {
-        'default': SQLAlchemyJobStore(url=f'sqlite:///{database.DATABASE_FILE}?timeout=15')
-    }
+    jobstores: Dict[str, SQLAlchemyJobStore] = {'default': SQLAlchemyJobStore(
+        url=f'sqlite:///{database.DATABASE_FILE}?timeout=15')}
 
     # Using a ThreadPoolExecutor to handle concurrent jobs.
     # This allows multiple booking jobs to run in parallel,
@@ -76,17 +83,34 @@ def run_scheduler():
     # The main booking job, runs at the start of every minute.
     # Using second=1 to provide a small buffer.
     scheduler.add_job(
-        run_process_auto_bookings, 'cron', minute='*', second=1, id='auto_booking_processor',
-        replace_existing=True, max_instances=1
-    )
+        run_process_auto_bookings,
+        'cron',
+        minute='*',
+        second=1,
+        id='auto_booking_processor',
+        replace_existing=True,
+        max_instances=1)
 
     # The cancellation reminder job, runs every 5 minutes.
-    scheduler.add_job(send_cancellation_reminders, 'cron', minute='*/5', second=1,
-                      id='cancellation_reminder_sender', replace_existing=True, max_instances=1, misfire_grace_time=30)
+    scheduler.add_job(
+        send_cancellation_reminders,
+        'cron',
+        minute='*/5',
+        second=1,
+        id='cancellation_reminder_sender',
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=30)
 
     # The reset failed bookings job, runs once daily just after midnight.
-    scheduler.add_job(reset_failed_bookings, 'cron', hour=0, minute=0,
-                      second=1, id='reset_failed_bookings_job', replace_existing=True)
+    scheduler.add_job(
+        reset_failed_bookings,
+        'cron',
+        hour=0,
+        minute=0,
+        second=1,
+        id='reset_failed_bookings_job',
+        replace_existing=True)
 
     # Proactively refresh all user sessions every 2 hours.
     scheduler.add_job(refresh_sessions, 'cron', hour='*/2', minute=0,
@@ -105,7 +129,8 @@ def run_scheduler():
             time.sleep(2)
     except KeyboardInterrupt:
         # This block might not be reached if signal handler catches SIGINT,
-        # but good to keep as fallback if signal handling fails or behavior varies.
+        # but good to keep as fallback if signal handling fails or behavior
+        # varies.
         graceful_shutdown(signal.SIGINT, None)
 
 

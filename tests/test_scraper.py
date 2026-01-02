@@ -169,7 +169,10 @@ def test_get_classes_parsing(scraper_mock, mocker):
     </div>
     """
     mocker.patch.object(
-        scraper_mock, '_get_classes_for_single_date', return_value={"@events": html})
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={
+            "@events": html})
 
     classes = scraper_mock.get_classes(days_in_advance=1)
 
@@ -216,7 +219,10 @@ def test_find_and_book_class_success(scraper_mock, mocker):
     </div>
     """
     mocker.patch.object(
-        scraper_mock, '_get_classes_for_single_date', return_value={"@events": html})
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={
+            "@events": html})
     mocker.patch.object(scraper_mock, '_get_csrf_token', return_value="fresh")
 
     mock_response = MagicMock()
@@ -244,7 +250,10 @@ def test_find_and_book_class_waitlist(scraper_mock, mocker):
     </div>
     """
     mocker.patch.object(
-        scraper_mock, '_get_classes_for_single_date', return_value={"@events": html})
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={
+            "@events": html})
     mocker.patch.object(scraper_mock, '_get_csrf_token', return_value="fresh")
 
     mock_response = MagicMock()
@@ -268,7 +277,10 @@ def test_find_and_book_class_already_booked(scraper_mock, mocker):
     </div>
     """
     mocker.patch.object(
-        scraper_mock, '_get_classes_for_single_date', return_value={"@events": html})
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={
+            "@events": html})
     mocker.patch.object(scraper_mock, '_get_csrf_token',
                         return_value="fresh")  # Added mock
 
@@ -292,7 +304,10 @@ def test_find_and_book_class_session_expired_redirect(scraper_mock, mocker):
     </div>
     """
     mocker.patch.object(
-        scraper_mock, '_get_classes_for_single_date', return_value={"@events": html})
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={
+            "@events": html})
     mocker.patch.object(scraper_mock, '_get_csrf_token', return_value="fresh")
 
     mock_response = MagicMock()
@@ -318,7 +333,10 @@ def test_find_and_cancel_booking_success(scraper_mock, mocker):
     </div>
     """
     mocker.patch.object(
-        scraper_mock, '_get_classes_for_single_date', return_value={"@events": html})
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={
+            "@events": html})
     mocker.patch.object(scraper_mock, '_get_csrf_token', return_value="fresh")
 
     mock_response = MagicMock()
@@ -341,7 +359,10 @@ def test_find_and_cancel_booking_not_found(scraper_mock, mocker):
     </div>
     """
     mocker.patch.object(
-        scraper_mock, '_get_classes_for_single_date', return_value={"@events": html})
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={
+            "@events": html})
     mocker.patch.object(scraper_mock, '_get_csrf_token',
                         return_value="fresh")  # Added mock
 
@@ -363,7 +384,10 @@ def test_find_and_cancel_booking_no_button(scraper_mock, mocker):
     </div>
     """
     mocker.patch.object(
-        scraper_mock, '_get_classes_for_single_date', return_value={"@events": html})
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={
+            "@events": html})
     mocker.patch.object(scraper_mock, '_get_csrf_token',
                         return_value="fresh")  # Added mock
 
@@ -496,7 +520,10 @@ def test_get_class_availability_found(scraper_mock, mocker):
     </div>
     """
     mocker.patch.object(
-        scraper_mock, '_get_classes_for_single_date', return_value={"@events": html})
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={
+            "@events": html})
 
     result = scraper_mock.get_class_availability("Test Class", "2025-01-01")
 
@@ -510,7 +537,10 @@ def test_get_class_availability_not_found(scraper_mock, mocker):
     </div>
     """
     mocker.patch.object(
-        scraper_mock, '_get_classes_for_single_date', return_value={"@events": html})
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={
+            "@events": html})
 
     result = scraper_mock.get_class_availability("Test Class", "2025-01-01")
 

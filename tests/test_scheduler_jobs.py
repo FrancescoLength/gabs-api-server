@@ -31,7 +31,8 @@ def test_process_auto_bookings_flow(memory_db, mocker):
         "html_content": ""
     }
 
-    # Define a lambda function to simulate get_scraper_instance_func returning the mock scraper
+    # Define a lambda function to simulate get_scraper_instance_func returning
+    # the mock scraper
     def get_mock_scraper_func(username_arg): return mock_scraper_obj
 
     booking_id = database.add_auto_booking(
@@ -211,7 +212,9 @@ def test_send_cancellation_reminders_webpush_gone_error(memory_db, mocker):
 
     sub_endpoint = 'http://example.com/endpoint'
     database.save_push_subscription(
-        username, {'endpoint': sub_endpoint, 'keys': {'p256dh': 'a', 'auth': 'a'}})
+        username, {
+            'endpoint': sub_endpoint, 'keys': {
+                'p256dh': 'a', 'auth': 'a'}})
     database.add_live_booking(username, "Test Class", class_date, class_time)
 
     # Mock webpush to raise 410 GONE exception

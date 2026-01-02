@@ -118,7 +118,9 @@ def test_get_status_success(test_client, mocker):
                  return_value=mock_response)
 
     response = test_client.get(
-        '/api/admin/status', headers={'Authorization': f'Bearer {admin_token}'})
+        '/api/admin/status',
+        headers={
+            'Authorization': f'Bearer {admin_token}'})
     assert response.status_code == 200
     assert response.json['status'] == 'ok'
     assert "ssh -p 12345 gabs-admin@0.tcp.ngrok.io" in response.json['ssh_tunnel_command']
@@ -139,7 +141,9 @@ def test_get_status_no_tcp_tunnel(test_client, mocker):
                  return_value=mock_response)
 
     response = test_client.get(
-        '/api/admin/status', headers={'Authorization': f'Bearer {admin_token}'})
+        '/api/admin/status',
+        headers={
+            'Authorization': f'Bearer {admin_token}'})
     assert response.status_code == 200
     assert response.json['status'] == 'ok'
     assert response.json['ssh_tunnel_command'] is None
@@ -150,12 +154,15 @@ def test_get_status_ngrok_error(test_client, mocker):
     mocker.patch('gabs_api_server.app.config.ADMIN_EMAIL', "admin@example.com")
 
     # Raise RequestException specifically, as caught in app.py
-    mocker.patch('gabs_api_server.app.requests.get',
-                 side_effect=requests.exceptions.RequestException("Connection failed"))
+    mocker.patch(
+        'gabs_api_server.app.requests.get',
+        side_effect=requests.exceptions.RequestException("Connection failed"))
     mock_logging_error = mocker.patch('gabs_api_server.app.logging.error')
 
     response = test_client.get(
-        '/api/admin/status', headers={'Authorization': f'Bearer {admin_token}'})
+        '/api/admin/status',
+        headers={
+            'Authorization': f'Bearer {admin_token}'})
     assert response.status_code == 200
     assert response.json['status'] == 'ok'
     assert response.json['ssh_tunnel_command'] is None

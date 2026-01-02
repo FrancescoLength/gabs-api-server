@@ -62,7 +62,8 @@ def handle_session_expiry(func: Callable) -> Callable:
             return func(self, *args, **kwargs)
         except SessionExpiredError as e:
             logging.warning(
-                f"Session expired during {func.__name__}. Attempting re-login.")
+                f"Session expired during {
+                    func.__name__}. Attempting re-login.")
             if self._login():
                 logging.info(
                     "Re-login successful. Retrying original operation.")
@@ -74,7 +75,8 @@ def handle_session_expiry(func: Callable) -> Callable:
 
 
 class Scraper:
-    def __init__(self, username: str, password: str, session_data: Optional[Dict[str, Any]] = None):
+    def __init__(self, username: str, password: str,
+                 session_data: Optional[Dict[str, Any]] = None):
         self.username = username
         self.password = password
         self.session = requests.Session()
@@ -129,7 +131,8 @@ class Scraper:
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             token_tag = soup.find('meta', {'name': 'csrf-token'})
-            if token_tag and isinstance(token_tag, dict):  # Beautiful soup check
+            if token_tag and isinstance(
+                    token_tag, dict):  # Beautiful soup check
                 token = token_tag.get('content')
                 return str(token) if token else None
             elif token_tag:  # If it behaves like a tag object
@@ -143,7 +146,8 @@ class Scraper:
         """Establish a session by logging in. Returns True on success, False on failure."""
         if self.disabled_until and datetime.now() < self.disabled_until:
             logging.warning(
-                f"Scraper for {self.username} is temporarily disabled due to repeated login failures.")
+                f"Scraper for {
+                    self.username} is temporarily disabled due to repeated login failures.")
             return False
 
         try:
@@ -174,7 +178,8 @@ class Scraper:
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 500 and e.request.url == LOGIN_URL:
                 logging.warning(
-                    f"Login failed for {self.username} with a 500 error, which may indicate an incorrect password.")
+                    f"Login failed for {
+                        self.username} with a 500 error, which may indicate an incorrect password.")
             else:
                 logging.error(
                     f"HTTP Error during login for {self.username}: {e.response.status_code} - "
@@ -184,7 +189,9 @@ class Scraper:
             if self.relogin_failures >= 3:
                 self.disabled_until = datetime.now() + timedelta(minutes=15)
                 logging.critical(
-                    f"Disabling scraper for {self.username} for 15 minutes due to {self.relogin_failures} consecutive login failures.")
+                    f"Disabling scraper for {
+                        self.username} for 15 minutes due to " f"{
+                        self.relogin_failures} consecutive login failures.")
             return False
 
     @handle_session_expiry
@@ -206,7 +213,9 @@ class Scraper:
         return all_classes
 
     @handle_session_expiry
-    def find_and_book_class(self, target_date_str: str, class_name: str = "", target_time: str = "", instructor: str = "") -> Dict[str, Any]:
+    def find_and_book_class(
+            self, target_date_str: str, class_name: str = "",
+            target_time: str = "", instructor: str = "") -> Dict[str, Any]:
         """Finds and books a class. Can match by class name or by time/instructor."""
         if target_time and class_name:
             logging.info(
@@ -219,12 +228,19 @@ class Scraper:
         classes_html = json_response.get('@events')
 
         if not classes_html:
-            return {"status": "error", "message": "Could not retrieve class list HTML for the specified date.", "html_content": json.dumps(json_response, indent=2)}
+            return {
+                "status": "error",
+                "message": ("Could not retrieve class list HTML for the specified date."),
+                "html_content": json.dumps(
+                    json_response,
+                    indent=2)}
 
-        return self._parse_and_execute_booking(classes_html, class_name, target_time, instructor, target_date_str)
+        return self._parse_and_execute_booking(
+            classes_html, class_name, target_time, instructor, target_date_str)
 
     @handle_session_expiry
-    def _get_classes_for_single_date(self, target_date_str: str) -> Dict[str, Any]:
+    def _get_classes_for_single_date(
+            self, target_date_str: str) -> Dict[str, Any]:
         """Helper method to fetch class HTML for a single date."""
         time.sleep(random.uniform(1, 2))
         if self.disabled_until and datetime.now() < self.disabled_until:
@@ -255,7 +271,8 @@ class Scraper:
 
         return json_response
 
-    def _parse_classes_from_html(self, classes_html: str, target_date: date) -> List[Dict[str, Any]]:
+    def _parse_classes_from_html(
+            self, classes_html: str, target_date: date) -> List[Dict[str, Any]]:
         """Helper method to parse class details from HTML."""
         soup = BeautifulSoup(classes_html, 'html.parser')
         gym_classes = soup.find_all('div', {'class': 'class grid'})
@@ -312,9 +329,14 @@ class Scraper:
         return parsed_classes
 
     @handle_session_expiry
-    def _parse_and_execute_booking(
-            self, classes_html: str, class_name: str, target_time: str, target_instructor: str,
-            target_date_str: str, is_retry: bool = False) -> Dict[str, Any]:
+    def _parse_and_execute_booking(self,
+                                   classes_html: str,
+                                   class_name: str,
+                                   target_time: str,
+                                   target_instructor: str,
+                                   target_date_str: str,
+                                   is_retry: bool = False) -> Dict[str,
+                                                                   Any]:
         """Helper method that finds and books a class."""
         self.csrf_token = self._get_csrf_token()  # Refresh CSRF token
         if not self.csrf_token:
@@ -376,11 +398,15 @@ class Scraper:
             already_booked_msg = best_match_element.find(string=re.compile(
                 "you are already registered|you are on the waiting list", re.I))
             if already_booked_msg:
-                return {"status": "info", "message": already_booked_msg.strip()}
+                return {
+                    "status": "info",
+                    "message": already_booked_msg.strip()}
 
             form = best_match_element.find('form', {'data-request': True})
             if not form:
-                return {"status": "error", "message": "Class matched, but no booking form was available (it may be full)."}
+                return {
+                    "status": "error",
+                    "message": "Class matched, but no booking form was available (it may be full)."}
 
             handler = form.get('data-request')
             button = form.find('button', {'type': 'submit'})
@@ -391,13 +417,18 @@ class Scraper:
             elif button and 'waitinglist' in button.get('class', []):
                 action_description = "waitlisting"
             else:
-                return {"status": "error", "message": "Could not determine action (Book/Waitlist)."}
+                return {
+                    "status": "error",
+                    "message": "Could not determine action (Book/Waitlist)."}
 
             class_id_input = form.find('input', {'name': 'id'})
             timestamp_input = form.find('input', {'name': 'timestamp'})
 
-            if not (class_id_input and timestamp_input and class_id_input.get('value') and timestamp_input.get('value')):
-                return {"status": "error", "message": "Could not extract required data from the booking form."}
+            if not (class_id_input and timestamp_input and class_id_input.get(
+                    'value') and timestamp_input.get('value')):
+                return {
+                    "status": "error",
+                    "message": "Could not extract required data from the booking form."}
 
             booking_payload = {
                 'id': class_id_input.get('value'),
@@ -410,7 +441,8 @@ class Scraper:
             }
 
             logging.info(
-                f"Attempting {action_description} for class ID {booking_payload['id']}...")
+                f"Attempting {action_description} for class ID {
+                    booking_payload['id']}...")
             response = self.session.post(
                 BOOKING_URL, data=booking_payload, headers=headers)
             response.raise_for_status()
@@ -421,17 +453,23 @@ class Scraper:
 
             logging.info(
                 f"SUCCESS! The {action_description} appears to have been successful.")
-            return {"status": "success", "action": action_description, "details": response.json(), "class_name": found_class_title}
+            return {
+                "status": "success",
+                "action": action_description,
+                "details": response.json(),
+                "class_name": found_class_title}
         else:
             if target_time and class_name:
                 return {
                     "status": "error",
                     "message": f"Could not find a suitable match for '{class_name}' at {target_time}. "
-                               f"Best match score was {highest_score}. Closest match found: '{found_class_title}'.",
+                    f"Best match score was {highest_score}. Closest match found: '{found_class_title}'.",
                     "html_content": classes_html
                 }
             else:
-                return {"status": "error", "message": f"Specified class '{class_name}' not found."}
+                return {
+                    "status": "error",
+                    "message": f"Specified class '{class_name}' not found."}
 
     @handle_session_expiry
     def find_and_cancel_booking(
@@ -443,9 +481,11 @@ class Scraper:
         json_response = self._get_classes_for_single_date(target_date_str)
         classes_html = json_response.get('@events')
         if not classes_html:
-            return {"error": "Could not retrieve class list for the specified date."}
+            return {
+                "error": "Could not retrieve class list for the specified date."}
 
-        return self._parse_and_execute_cancellation(classes_html, class_name, target_time, instructor_name, target_date_str)
+        return self._parse_and_execute_cancellation(
+            classes_html, class_name, target_time, instructor_name, target_date_str)
 
     @handle_session_expiry
     def _parse_and_execute_cancellation(
@@ -495,12 +535,16 @@ class Scraper:
                     break
 
         if not target_class_element:
-            return {"status": "error", "message": "Specified class not found on the given date."}
+            return {
+                "status": "error",
+                "message": "Specified class not found on the given date."}
 
         # --- Merged logic from _perform_cancellation_on_class ---
         form = target_class_element.find('form', {'data-request': 'onBook'})
         if not form:
-            return {"status": "error", "message": "Class found, but no form was available."}
+            return {
+                "status": "error",
+                "message": "Class found, but no form was available."}
 
         button = target_class_element.find('button', {'class': 'cancel'})
         if not button:
@@ -521,8 +565,7 @@ class Scraper:
                 class_id_input.get('value') and timestamp_input.get('value')):
             return {
                 "status": "error",
-                "message": "Could not extract required data from the cancellation form."
-            }
+                "message": "Could not extract required data from the cancellation form."}
 
         cancellation_payload = {
             'id': class_id_input.get('value'),
@@ -535,7 +578,8 @@ class Scraper:
         }
 
         logging.info(
-            f"Attempting cancellation for class ID {cancellation_payload['id']}...")
+            f"Attempting cancellation for class ID {
+                cancellation_payload['id']}...")
         response = self.session.post(
             BOOKING_URL, data=cancellation_payload, headers=headers)
         response.raise_for_status()
@@ -546,7 +590,10 @@ class Scraper:
 
         logging.info(
             "SUCCESS! The cancellation appears to have been successful.")
-        return {"status": "success", "action": "cancellation", "details": response.json()}
+        return {
+            "status": "success",
+            "action": "cancellation",
+            "details": response.json()}
 
     @handle_session_expiry
     def get_my_bookings(self) -> List[Dict[str, str]]:
@@ -556,7 +603,8 @@ class Scraper:
             MEMBERS_URL, headers={'User-Agent': self.user_agent})
         response.raise_for_status()
 
-        # Check if we were redirected to the login page, indicating an expired session
+        # Check if we were redirected to the login page, indicating an expired
+        # session
         if LOGIN_URL in response.url:
             raise SessionExpiredError(
                 "Session expired, redirect to login page detected.")
@@ -600,14 +648,16 @@ class Scraper:
         return my_bookings
 
     @handle_session_expiry
-    def get_class_availability(self, class_name: str, target_date_str: str) -> Dict[str, str | int]:
+    def get_class_availability(
+            self, class_name: str, target_date_str: str) -> Dict[str, str | int]:
         """Gets the availability for a specific class on a given date."""
         logging.info(
             f"Checking availability for '{class_name}' on {target_date_str}")
         json_response = self._get_classes_for_single_date(target_date_str)
         classes_html = json_response.get('@events')
         if not classes_html:
-            return {"error": "Could not retrieve class list for the specified date."}
+            return {
+                "error": "Could not retrieve class list for the specified date."}
 
         soup = BeautifulSoup(classes_html, 'html.parser')
         gym_classes = soup.find_all('div', {'class': 'class grid'})
@@ -629,6 +679,7 @@ class Scraper:
                         "remaining_spaces": spaces
                     }
                 else:
-                    return {"error": f"Could not parse remaining spaces for {title}."}
+                    return {
+                        "error": f"Could not parse remaining spaces for {title}."}
 
         return {"error": f"Class '{class_name}' not found on {target_date_str}."}

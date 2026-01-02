@@ -9,7 +9,8 @@ def test_run_scheduler_loop(mocker):
     mock_scheduler_instance = mock_scheduler_class.return_value
     mocker.patch('gabs_api_server.scheduler_runner.signal.signal')
 
-    # Simulate loop running once then raising KeyboardInterrupt to exit the while True loop
+    # Simulate loop running once then raising KeyboardInterrupt to exit the
+    # while True loop
     mocker.patch('gabs_api_server.scheduler_runner.time.sleep',
                  side_effect=KeyboardInterrupt)
 

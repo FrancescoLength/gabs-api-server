@@ -1,4 +1,3 @@
-```python
 # gabs_api_server/services/auto_booking_service.py
 
 import logging
@@ -51,24 +50,26 @@ def process_auto_bookings_job(
 
         for booking_id, last_attempt_at, status in stuck_in_progress_bookings:
             if status == 'in_progress':
-                # If last_attempt_at is available and it's too old, it's definitely stuck
-                if last_attempt_at and (now_timestamp - last_attempt_at) > in_progress_staleness_threshold_seconds:
+                # If last_attempt_at is available and it's too old, it's
+                # definitely stuck
+                if last_attempt_at and (
+                        now_timestamp -
+                        last_attempt_at) > in_progress_staleness_threshold_seconds:
                     logger.warning(
                         f"Auto-booking ID {booking_id} has been stuck in 'in_progress' for "
                         f"more than {in_progress_staleness_threshold_seconds // 60} minutes. Resetting to 'pending'."
                     )
                     database.update_auto_booking_status(
-                        booking_id, 'pending', last_attempt_at=now_timestamp, retry_count=0
-                    )
+                        booking_id, 'pending', last_attempt_at=now_timestamp, retry_count=0)
                 elif not last_attempt_at:
-                    # If last_attempt_at is None for an 'in_progress' booking, it's also stuck
+                    # If last_attempt_at is None for an 'in_progress' booking,
+                    # it's also stuck
                     logger.warning(
                         f"Auto-booking ID {booking_id} found in 'in_progress' state with no 'last_attempt_at'. "
                         f"Resetting to 'pending'."
                     )
                     database.update_auto_booking_status(
-                        booking_id, 'pending', last_attempt_at=now_timestamp, retry_count=0
-                    )
+                        booking_id, 'pending', last_attempt_at=now_timestamp, retry_count=0)
 
         # Now process legitimately pending bookings
         pending_bookings = database.get_pending_auto_bookings()
@@ -79,8 +80,7 @@ def process_auto_bookings_job(
             # Attempt to lock the booking before processing
             if not database.lock_auto_booking(booking_id):
                 logger.warning(
-                    f"Booking {booking_id} is already in 'in_progress' state or could not be locked. Skipping for now."
-                )
+                    f"Booking {booking_id} is already in 'in_progress' state or could not be locked. Skipping for now.")
                 continue
 
             try:
@@ -89,20 +89,27 @@ def process_auto_bookings_job(
                 # status is at index 4
                 if not booking_details or booking_details[4] != 'in_progress':
                     logger.warning(
-                        f"Could not refetch booking {booking_id} or status was not 'in_progress' after locking. Skipping."
-                    )
+                        f"Could not refetch booking {booking_id} or status was not 'in_progress' after locking. Skipping.")
                     continue
 
-                # Unpack the booking details (assuming the same tuple structure as before)
+                # Unpack the booking details (assuming the same tuple structure
+                # as before)
                 (
                     booking_id, username, class_name, target_time, status, created_at,  # type: ignore
                     last_attempt_at, retry_count, day_of_week, instructor, last_booked_date  # type: ignore
                 ) = booking_details  # type: ignore
-                # print(f"DEBUG_INTERNAL: Inside job. retry_count from DB: {retry_count}") # DEBUG PRINT
+                # print(f"DEBUG_INTERNAL: Inside job. retry_count from DB:
+                # {retry_count}") # DEBUG PRINT
 
                 today = datetime.now()
-                days_of_week_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2,
-                                    "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
+                days_of_week_map = {
+                    "Monday": 0,
+                    "Tuesday": 1,
+                    "Wednesday": 2,
+                    "Thursday": 3,
+                    "Friday": 4,
+                    "Saturday": 5,
+                    "Sunday": 6}
 
                 # Calculate the next occurrence date
                 target_day_index = days_of_week_map.get(day_of_week)
@@ -121,13 +128,15 @@ def process_auto_bookings_job(
                     timedelta(days=days_until_target)
                 current_target_date = next_occurrence_date.strftime("%Y-%m-%d")
 
-                # If this class was already booked for this date, just reset status to pending and continue
+                # If this class was already booked for this date, just reset
+                # status to pending and continue
                 if last_booked_date == current_target_date:
                     database.update_auto_booking_status(
                         booking_id, 'pending')  # Release the lock
                     continue
 
-                # Calculate the booking window (e.g., 48 hours before class starts)
+                # Calculate the booking window (e.g., 48 hours before class
+                # starts)
                 try:
                     target_class_datetime = datetime.strptime(
                         f"{current_target_date} {target_time}", "%Y-%m-%d %H:%M")
@@ -158,20 +167,19 @@ def process_auto_bookings_job(
 
                     if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:
                         database.update_auto_booking_status(
-                            booking_id, 'pending', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count
-                        )
+                            booking_id, 'pending', last_attempt_at=int(
+                                today.timestamp()), retry_count=new_retry_count)
                     else:
                         database.update_auto_booking_status(
-                            booking_id, 'failed', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count
-                        )
+                            booking_id, 'failed', last_attempt_at=int(
+                                today.timestamp()), retry_count=new_retry_count)
                         logger.error(
                             f"Scraper session for {username} not found after {new_retry_count} attempts. "
                             f"Marking auto-booking {booking_id} as failed.")
                     continue
 
                 logger.info(
-                    f"Attempting to book class on {current_target_date} at {target_time} with {instructor} for user {username} (Booking ID: {booking_id})"
-                )
+                    f"Attempting to book class on {current_target_date} at {target_time} with {instructor} for user {username} (Booking ID: {booking_id})")
 
                 result = user_scraper.find_and_book_class(
                     target_date_str=current_target_date, class_name=class_name,
@@ -186,24 +194,35 @@ def process_auto_bookings_job(
                         "already booked" in result_message)):
                     booked_class_name = result.get('class_name', class_name)
                     database.update_auto_booking_status(
-                        booking_id, 'pending', last_booked_date=current_target_date,
-                        last_attempt_at=int(today.timestamp()), retry_count=0
-                    )
+                        booking_id,
+                        'pending',
+                        last_booked_date=current_target_date,
+                        last_attempt_at=int(
+                            today.timestamp()),
+                        retry_count=0)
                     database.add_live_booking(
-                        username, booked_class_name, current_target_date, target_time, instructor, booking_id)
+                        username,
+                        booked_class_name,
+                        current_target_date,
+                        target_time,
+                        instructor,
+                        booking_id)
                     logger.info(
-                        f"Successfully processed booking for auto-booking {booking_id}. Status: {result.get('message')}")
+                        f"Successfully processed booking for auto-booking {booking_id}. Status: {
+                            result.get('message')}")
                 else:
                     new_retry_count = (retry_count or 0) + 1
                     html_content = result.get('html_content')
 
-                    if 'Could not find a suitable match' in result.get('message', ''):
+                    if 'Could not find a suitable match' in result.get(
+                            'message', ''):
                         if html_content:
                             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                             debug_filename = f"debug_booking_{booking_id}_{timestamp}.html"
                             debug_filepath = os.path.join(os.path.dirname(
                                 os.path.abspath(__file__)), debug_filename)
-                            # Put the file writing task into the queue instead of writing directly
+                            # Put the file writing task into the queue instead
+                            # of writing directly
                             debug_writer_queue_instance.put(
                                 (debug_filepath, html_content))
                             logger.info(
@@ -211,16 +230,16 @@ def process_auto_bookings_job(
 
                         if new_retry_count < 2:  # type: ignore
                             database.update_auto_booking_status(
-                                booking_id, 'pending', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count
-                            )
+                                booking_id, 'pending', last_attempt_at=int(
+                                    today.timestamp()), retry_count=new_retry_count)
                             logger.warning(
                                 f"Booking attempt failed for auto-booking {booking_id} (match not found). "
                                 f"Retrying (attempt {new_retry_count}). Result: {result.get('message')}"
                             )
                         else:
                             database.update_auto_booking_status(
-                                booking_id, 'failed', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count
-                            )
+                                booking_id, 'failed', last_attempt_at=int(
+                                    today.timestamp()), retry_count=new_retry_count)
                             logger.error(
                                 f"Booking attempt failed for auto-booking {booking_id} after 2 attempts (match not found). "
                                 f"Marking as failed. Result: {result.get('message')}"
@@ -228,16 +247,16 @@ def process_auto_bookings_job(
                     else:
                         if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:  # type: ignore
                             database.update_auto_booking_status(
-                                booking_id, 'pending', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count
-                            )
+                                booking_id, 'pending', last_attempt_at=int(
+                                    today.timestamp()), retry_count=new_retry_count)
                             logger.warning(
                                 f"Booking attempt failed for auto-booking {booking_id}. "
                                 f"Retrying (attempt {new_retry_count}). Result: {result}"
                             )
                         else:
                             database.update_auto_booking_status(
-                                booking_id, 'failed', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count
-                            )
+                                booking_id, 'failed', last_attempt_at=int(
+                                    today.timestamp()), retry_count=new_retry_count)
                             logger.error(
                                 f"Booking attempt failed for auto-booking {booking_id} after {new_retry_count} retries. "
                                 f"Marking as failed. Result: {result}"
@@ -254,28 +273,28 @@ def process_auto_bookings_job(
                 new_retry_count = (retry_count or 0) + 1
                 if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:  # type: ignore
                     database.update_auto_booking_status(
-                        booking_id, 'pending', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count
-                    )
+                        booking_id, 'pending', last_attempt_at=int(
+                            today.timestamp()), retry_count=new_retry_count)
                     logger.error(
                         f"Error during booking attempt for auto-booking {booking_id}: {e}. "
                         f"Retrying (attempt {new_retry_count})."
                     )
                 else:
                     database.update_auto_booking_status(
-                        booking_id, 'failed', last_attempt_at=int(today.timestamp()), retry_count=new_retry_count
-                    )
+                        booking_id, 'failed', last_attempt_at=int(
+                            today.timestamp()), retry_count=new_retry_count)
                     logger.error(
                         f"Error during booking attempt for auto-booking {booking_id}: {e}. "
                         f"Marking as failed after {new_retry_count} retries."
                     )
             finally:
                 # Safeguard to ensure the lock is always released.
-                # Re-fetch the booking state in case it was modified by a retry logic path
+                # Re-fetch the booking state in case it was modified by a retry
+                # logic path
                 current_booking_state = database.get_auto_booking_by_id(
                     booking_id)
                 # logger.debug(f"DEBUG: Finally block for {booking_id}. Current status from DB: {current_booking_state[4] if current_booking_state else 'None'}.")
                 if current_booking_state and current_booking_state[4] == 'in_progress':
                     database.update_auto_booking_status(booking_id, 'pending')
                     logger.warning(
-                        f"Booking {booking_id} was left in 'in_progress' state and has been reset to 'pending' by finally block."
-                    )
+                        f"Booking {booking_id} was left in 'in_progress' state and has been reset to 'pending' by finally block.")

@@ -95,7 +95,8 @@ def test_sync_live_bookings_full_booking_not_found(memory_db, mocker):
     sync_live_bookings(username, scraped_bookings)
 
     # 3. Assert
-    # The booking should still be in the DB from the original add_live_booking call, but no new ones should be added
+    # The booking should still be in the DB from the original add_live_booking
+    # call, but no new ones should be added
     live_bookings = database.get_live_bookings_for_user(username)
     assert len(live_bookings) == 1
     assert live_bookings[0][2] == "Existing Class"
@@ -110,12 +111,18 @@ def test_admin_endpoints_access(client, mocker):
 
     # Login as admin
     admin_login_resp = client.post(
-        '/api/login', json={'username': 'admin@example.com', 'password': 'password'})
+        '/api/login',
+        json={
+            'username': 'admin@example.com',
+            'password': 'password'})
     admin_token = admin_login_resp.json['access_token']
 
     # Login as normal user
     user_login_resp = client.post(
-        '/api/login', json={'username': 'test@example.com', 'password': 'password'})
+        '/api/login',
+        json={
+            'username': 'test@example.com',
+            'password': 'password'})
     user_token = user_login_resp.json['access_token']
 
     # Admin headers
@@ -138,12 +145,17 @@ def test_admin_endpoints_access(client, mocker):
     ]
 
     for endpoint, mock_path, mock_return_value in endpoints_to_test:
-        # Mock the underlying database call or external dependency for admin access
+        # Mock the underlying database call or external dependency for admin
+        # access
         if mock_path:
             mocker.patch(mock_path, return_value=mock_return_value)
         if endpoint == '/api/admin/status':
-            mocker.patch('gabs_api_server.app.requests.get', return_value=mocker.Mock(
-                status_code=200, json=lambda: {'tunnels': []}))
+            mocker.patch(
+                'gabs_api_server.app.requests.get',
+                return_value=mocker.Mock(
+                    status_code=200,
+                    json=lambda: {
+                        'tunnels': []}))
 
         # Test admin access
         admin_resp = client.get(endpoint, headers=admin_headers)
@@ -160,7 +172,10 @@ def test_admin_endpoints_get_status_ngrok_failure(client, mocker):
                  return_value=mocker.Mock())
     mocker.patch('gabs_api_server.app.config.ADMIN_EMAIL', 'admin@example.com')
     admin_login_resp = client.post(
-        '/api/login', json={'username': 'admin@example.com', 'password': 'password'})
+        '/api/login',
+        json={
+            'username': 'admin@example.com',
+            'password': 'password'})
     admin_token = admin_login_resp.json['access_token']
     admin_headers = {'Authorization': f'Bearer {admin_token}'}
 
@@ -187,7 +202,10 @@ def test_api_login_invalid_credentials(client, mocker):
 
     # Attempt login with invalid credentials
     response = client.post(
-        '/api/login', json={'username': 'invalid@example.com', 'password': 'wrong_password'})
+        '/api/login',
+        json={
+            'username': 'invalid@example.com',
+            'password': 'wrong_password'})
     assert response.status_code == 401
     assert response.json['error'] == 'Invalid credentials or login failed'
 
@@ -214,7 +232,10 @@ def test_api_logout_success(client, mocker):
 
     # Login to get a valid token
     login_resp = client.post(
-        '/api/login', json={'username': 'user@example.com', 'password': 'password'})
+        '/api/login',
+        json={
+            'username': 'user@example.com',
+            'password': 'password'})
     token = login_resp.json['access_token']
 
     # Mock database.delete_session
@@ -266,18 +287,20 @@ def test_api_book_success(client, mocker):
     mocker.patch('gabs_api_server.app.get_jwt_identity', return_value=username)
 
     # Make the API call
-    response = client.post('/api/book', headers={'Authorization': f'Bearer {token}'}, json={
-        'class_name': class_name,
-        'date': target_date,
-        'time': target_time
-    })
+    response = client.post(
+        '/api/book',
+        headers={
+            'Authorization': f'Bearer {token}'},
+        json={
+            'class_name': class_name,
+            'date': target_date,
+            'time': target_time})
 
     # Assertions
     assert response.status_code == 200
     assert response.json['status'] == 'success'
     mock_scraper.find_and_book_class.assert_called_once_with(
-        target_date_str=target_date, class_name=class_name, target_time=target_time
-    )
+        target_date_str=target_date, class_name=class_name, target_time=target_time)
 
 
 def test_api_book_missing_parameters(client, mocker):
@@ -300,26 +323,35 @@ def test_api_book_missing_parameters(client, mocker):
     mocker.patch('gabs_api_server.app.get_jwt_identity', return_value=username)
 
     # Test case 1: Missing class_name
-    response = client.post('/api/book', headers={'Authorization': f'Bearer {token}'}, json={
-        'date': "2025-01-01",
-        'time': "10:00"
-    })
+    response = client.post(
+        '/api/book',
+        headers={
+            'Authorization': f'Bearer {token}'},
+        json={
+            'date': "2025-01-01",
+            'time': "10:00"})
     assert response.status_code == 400
     assert response.json['error'] == 'class_name, date, and time are required.'
 
     # Test case 2: Missing date
-    response = client.post('/api/book', headers={'Authorization': f'Bearer {token}'}, json={
-        'class_name': "Test Class",
-        'time': "10:00"
-    })
+    response = client.post(
+        '/api/book',
+        headers={
+            'Authorization': f'Bearer {token}'},
+        json={
+            'class_name': "Test Class",
+            'time': "10:00"})
     assert response.status_code == 400
     assert response.json['error'] == 'class_name, date, and time are required.'
 
     # Test case 3: Missing time
-    response = client.post('/api/book', headers={'Authorization': f'Bearer {token}'}, json={
-        'class_name': "Test Class",
-        'date': "2025-01-01"
-    })
+    response = client.post(
+        '/api/book',
+        headers={
+            'Authorization': f'Bearer {token}'},
+        json={
+            'class_name': "Test Class",
+            'date': "2025-01-01"})
     assert response.status_code == 400
     assert response.json['error'] == 'class_name, date, and time are required.'
 
@@ -334,8 +366,9 @@ def test_api_book_session_not_found(client, mocker):
     mock_login_scraper = mocker.Mock()
     # Needed for successful session saving during login
     mock_login_scraper.to_dict.return_value = {}
-    mocker.patch('gabs_api_server.app.get_scraper_instance',
-                 return_value=mock_login_scraper)  # This patch is for the login call
+    mocker.patch(
+        'gabs_api_server.app.get_scraper_instance',
+        return_value=mock_login_scraper)  # This patch is for the login call
 
     # Login to get a token
     mocker.patch('gabs_api_server.database.load_session',
@@ -354,11 +387,14 @@ def test_api_book_session_not_found(client, mocker):
     mocker.patch('gabs_api_server.app.get_scraper_instance', return_value=None)
 
     # Make the API call
-    response = client.post('/api/book', headers={'Authorization': f'Bearer {token}'}, json={
-        'class_name': class_name,
-        'date': target_date,
-        'time': target_time
-    })
+    response = client.post(
+        '/api/book',
+        headers={
+            'Authorization': f'Bearer {token}'},
+        json={
+            'class_name': class_name,
+            'date': target_date,
+            'time': target_time})
 
     # Assertions
     assert response.status_code == 401
@@ -371,7 +407,8 @@ def test_api_book_session_expired(client, mocker):
     target_date = "2025-01-01"
     target_time = "10:00"
 
-    # Mock get_scraper_instance to return a scraper mock that raises SessionExpiredError
+    # Mock get_scraper_instance to return a scraper mock that raises
+    # SessionExpiredError
     mock_scraper = mocker.Mock()
     mock_scraper.find_and_book_class.side_effect = SessionExpiredError(
         "Session is stale")
@@ -394,19 +431,21 @@ def test_api_book_session_expired(client, mocker):
         'gabs_api_server.app.handle_session_expiration')
 
     # Make the API call
-    response = client.post('/api/book', headers={'Authorization': f'Bearer {token}'}, json={
-        'class_name': class_name,
-        'date': target_date,
-        'time': target_time
-    })
+    response = client.post(
+        '/api/book',
+        headers={
+            'Authorization': f'Bearer {token}'},
+        json={
+            'class_name': class_name,
+            'date': target_date,
+            'time': target_time})
 
     # Assertions
     assert response.status_code == 401
     assert response.json['error'] == 'Your session has expired. Please log in again.'
     mock_handle_session_expiration.assert_called_once_with(username)
     mock_scraper.find_and_book_class.assert_called_once_with(
-        target_date_str=target_date, class_name=class_name, target_time=target_time
-    )
+        target_date_str=target_date, class_name=class_name, target_time=target_time)
 
 
 def test_api_book_generic_exception(client, mocker):
@@ -415,7 +454,8 @@ def test_api_book_generic_exception(client, mocker):
     target_date = "2025-01-01"
     target_time = "10:00"
 
-    # Mock get_scraper_instance to return a scraper mock that raises a generic Exception
+    # Mock get_scraper_instance to return a scraper mock that raises a generic
+    # Exception
     mock_scraper = mocker.Mock()
     mock_scraper.find_and_book_class.side_effect = Exception(
         "Something unexpected happened")
@@ -437,11 +477,14 @@ def test_api_book_generic_exception(client, mocker):
     mock_logger_error = mocker.patch('gabs_api_server.app.logging.error')
 
     # Make the API call
-    response = client.post('/api/book', headers={'Authorization': f'Bearer {token}'}, json={
-        'class_name': class_name,
-        'date': target_date,
-        'time': target_time
-    })
+    response = client.post(
+        '/api/book',
+        headers={
+            'Authorization': f'Bearer {token}'},
+        json={
+            'class_name': class_name,
+            'date': target_date,
+            'time': target_time})
 
     # Assertions
     assert response.status_code == 500
@@ -449,5 +492,4 @@ def test_api_book_generic_exception(client, mocker):
     mock_logger_error.assert_called_once()
     assert "Unhandled error in scraper endpoint" in mock_logger_error.call_args[0][0]
     mock_scraper.find_and_book_class.assert_called_once_with(
-        target_date_str=target_date, class_name=class_name, target_time=target_time
-    )
+        target_date_str=target_date, class_name=class_name, target_time=target_time)

@@ -83,11 +83,14 @@ def test_process_auto_bookings_job_stuck_in_progress_reset(memory_db, mocker):
     assert updated_booking[4] == 'pending'  # Status should be reset to pending
 
 
-def test_process_auto_bookings_job_booking_match_not_found_retry(memory_db, mocker):
+def test_process_auto_bookings_job_booking_match_not_found_retry(
+        memory_db,
+        mocker):
     # Setup
     username = "test_user"
     class_name = "Missing Class"
-    # Use a time 5 minutes from now and the current day to ensure it's within the 48h booking window
+    # Use a time 5 minutes from now and the current day to ensure it's within
+    # the 48h booking window
     target_time = (datetime.now() + timedelta(minutes=5)).strftime("%H:%M")
     day_of_week = datetime.now().strftime("%A")
 
@@ -96,8 +99,7 @@ def test_process_auto_bookings_job_booking_match_not_found_retry(memory_db, mock
     mock_scraper_obj.find_and_book_class.return_value = {
         "status": "error",
         "message": "Could not find a suitable match for 'Missing Class' at 11:00.",
-        "html_content": "some html"
-    }
+        "html_content": "some html"}
 
     # Create a mock for the get_scraper_instance_func itself
     mock_get_scraper_instance_func = mocker.Mock(return_value=mock_scraper_obj)
@@ -237,7 +239,8 @@ def test_process_auto_bookings_job_too_early_to_book(memory_db, mocker):
     # Assert
     updated_booking = database.get_auto_booking_by_id(booking_id)
     assert updated_booking[4] == 'pending'  # Status should remain pending
-    # last_booked_date and retry_count should not be changed as no booking attempt was made
+    # last_booked_date and retry_count should not be changed as no booking
+    # attempt was made
     assert updated_booking[7] == 0
 
 
@@ -268,7 +271,9 @@ def test_process_auto_bookings_job_scraper_not_found(memory_db, mocker):
     assert updated_booking[7] == 1  # retry_count should be 1 (first attempt)
 
 
-def test_process_auto_bookings_job_scraper_not_found_max_retries(memory_db, mocker):
+def test_process_auto_bookings_job_scraper_not_found_max_retries(
+        memory_db,
+        mocker):
     # Setup
     username = "test_user"
     class_name = "No Scraper Class Max Retries"
@@ -281,7 +286,8 @@ def test_process_auto_bookings_job_scraper_not_found_max_retries(memory_db, mock
     # Set retry_count to MAX_AUTO_BOOK_RETRIES - 1 so the next attempt hits the limit
     # Note: The logic in auto_booking_service increments retry_count BEFORE checking the limit for the scraper case.
     # Logic: new_retry_count = retry_count + 1. If new_retry_count < MAX (3), update pending. Else failed.
-    # So if we want it to fail, we need new_retry_count to be 3. So start with 2.
+    # So if we want it to fail, we need new_retry_count to be 3. So start with
+    # 2.
     database.update_auto_booking_status(
         booking_id, 'pending', retry_count=config.MAX_AUTO_BOOK_RETRIES - 1)
 

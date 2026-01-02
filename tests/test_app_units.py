@@ -27,7 +27,8 @@ def test_get_scraper_instance_with_password_success(mocker):
                  return_value=(None, None))
     # Patch crypto.encrypt and store the patch object
     mock_crypto_encrypt = mocker.patch(
-        'gabs_api_server.app.crypto.encrypt', return_value="encrypted_password")
+        'gabs_api_server.app.crypto.encrypt',
+        return_value="encrypted_password")
     # Patch database.save_session and store the patch object
     mock_database_save_session = mocker.patch(
         'gabs_api_server.app.database.save_session')
@@ -60,7 +61,8 @@ def test_get_scraper_instance_with_password_failure(mocker):
     assert "Failed to create new session" in mock_logging_error.call_args[0][0]
 
 
-def test_get_scraper_instance_without_password_existing_session_success(mocker):
+def test_get_scraper_instance_without_password_existing_session_success(
+        mocker):
     # Mock Scraper and its methods
     mock_scraper_instance = mocker.Mock(spec=Scraper)
     # Patch the Scraper class and store the patch object
@@ -82,7 +84,8 @@ def test_get_scraper_instance_without_password_existing_session_success(mocker):
         "test_user", "plain_password", session_data={"cookies": "data"})
 
 
-def test_get_scraper_instance_without_password_existing_session_failure(mocker):
+def test_get_scraper_instance_without_password_existing_session_failure(
+        mocker):
     # Mock Scraper to raise an exception during initialization
     mocker.patch('gabs_api_server.app.Scraper',
                  side_effect=Exception("Scraper init failed"))
@@ -170,7 +173,8 @@ def temp_flask_app_for_decorator_test():
     return _app
 
 
-def test_admin_required_decorator_admin_access(temp_flask_app_for_decorator_test, mocker):
+def test_admin_required_decorator_admin_access(
+        temp_flask_app_for_decorator_test, mocker):
     mocker.patch('gabs_api_server.app.config.ADMIN_EMAIL', 'admin@example.com')
 
     with temp_flask_app_for_decorator_test.app_context():  # Push app context
@@ -183,12 +187,15 @@ def test_admin_required_decorator_admin_access(temp_flask_app_for_decorator_test
 
     with temp_flask_app_for_decorator_test.test_client() as client:
         response = client.get(
-            '/test_admin_route', headers={'Authorization': f'Bearer {admin_token}'})
+            '/test_admin_route',
+            headers={
+                'Authorization': f'Bearer {admin_token}'})
         assert response.status_code == 200
         assert response.json['message'] == 'Admin granted'
 
 
-def test_admin_required_decorator_user_access(temp_flask_app_for_decorator_test, mocker):
+def test_admin_required_decorator_user_access(
+        temp_flask_app_for_decorator_test, mocker):
     mocker.patch('gabs_api_server.app.config.ADMIN_EMAIL', 'admin@example.com')
 
     with temp_flask_app_for_decorator_test.app_context():  # Push app context
