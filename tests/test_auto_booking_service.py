@@ -80,8 +80,9 @@ def test_process_auto_bookings_job_booking_match_not_found_retry(memory_db, mock
     # Setup
     username = "test_user"
     class_name = "Missing Class"
-    target_time = "11:00"
-    day_of_week = "Tuesday"
+    # Use a time 5 minutes from now and the current day to ensure it's within the 48h booking window
+    target_time = (datetime.now() + timedelta(minutes=5)).strftime("%H:%M")
+    day_of_week = datetime.now().strftime("%A")
 
     # Mock the Scraper object that get_scraper_instance will return
     mock_scraper_obj = mocker.Mock()

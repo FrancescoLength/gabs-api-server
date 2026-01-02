@@ -1,3 +1,4 @@
+from datetime import datetime
 from gabs_api_server.app import sync_live_bookings
 from gabs_api_server import database
 import pytest # Import pytest for assert_called_once
@@ -62,7 +63,9 @@ def test_sync_live_bookings_invalid_date_format(memory_db, mocker):
 def test_sync_live_bookings_full_booking_not_found(memory_db, mocker):
     # 1. Setup
     username = "test_user"
-    database.add_live_booking(username, "Existing Class", "2025-01-01", "10:00")
+    current_year = datetime.now().year
+    class_date = f"{current_year}-01-01"
+    database.add_live_booking(username, "Existing Class", class_date, "10:00")
     
     # Scraped booking that is valid, but full_booking won't be found
     # (e.g., if there's a mismatch between scraped_bookings_set key and original scraped_bookings)
