@@ -1,26 +1,27 @@
 # GABS API Server: Automated Gym Booking & Management
+<img width="648" height="485" alt="Screenshot from 2026-02-04 14-10-26" src="https://github.com/user-attachments/assets/d010fb9b-28d2-4307-afe7-f453b87c75a2" />
 
-This Flask-based API server empowers users to seamlessly interact with a famous Bristol gym's website, automating the process of viewing, booking, and managing gym class reservations. Designed for efficiency and convenience, it acts as a robust backend for custom client applications (such as a React frontend), ideal for deployment on low-power devices like a Raspberry Pi.
+This Flask-based API server empowers users to seamlessly interact with a famous Bristol gym's website, automating the process of viewing, booking, and managing gym class reservations. Designed for efficiency and convenience, it acts as a robust backend for custom client applications (such as a React frontend),ideal for deployment on low-power devices like a Raspberry Pi.
 
 ## Key Features
 
--   **Secure User Authentication:** Utilizes JWT for secure user login and session management.
+-   **Secure User Authentication:** Utilises JWT for secure user login and session management.
 -   **Comprehensive Class Overview:** Access a real-time list of available gym classes for the upcoming 7 days.
 -   **Effortless Booking & Waitlisting:** Book classes directly or automatically join the waiting list if a class is full.
 -   **Streamlined Cancellation:** Easily cancel existing bookings.
--   **Personalized Booking Management:** View all your upcoming class bookings and waiting list entries.
--   **Automated Recurring Bookings:** Schedule and manage recurring auto-bookings for your favorite classes. The scheduler runs in a dedicated process to ensure time-critical bookings are handled with high precision and concurrency.
+-   **Personalised Booking Management:** View all your upcoming class bookings and waiting list entries.
+-   **Automated Recurring Bookings:** Schedule and manage recurring auto-bookings for your favourite classes. The scheduler runs in a dedicated process to ensure time-critical bookings are handled with high precision and concurrency.
 -   **Intelligent Push Notifications:** Receive timely push notifications, including crucial cancellation reminders.
 -   **Admin Panel:** Dedicated endpoints for administrators to monitor logs, auto-bookings, push subscriptions, and server status.
 -   **Automatic API Documentation:** Interactive Swagger UI documentation available at `/apidocs`.
 
 ## Credential Management and Security
 
-The GABS API Server prioritizes the security of user credentials. The system employs robust measures to handle sensitive information:
+The GABS API Server prioritises the security of user credentials. The system employs robust measures to handle sensitive information:
 
 *   **Encrypted Storage:** User passwords are never stored in plaintext. Instead, they are securely encrypted using a strong symmetric encryption scheme (Fernet from the `cryptography` library) and persisted in the SQLite database.
 *   **Environment Variables:** All sensitive keys (`ENCRYPTION_KEY`, `JWT_SECRET_KEY`, `VAPID_PRIVATE_KEY`) are strictly loaded from environment variables. **There are no fallback file-based keys.** This practice prevents sensitive data from being exposed in version control.
-*   **Secure Session Management:** Upon successful authentication, encrypted credentials are utilized to establish and maintain a secure session with the gym's website. Session-specific data (cookies, CSRF tokens) is securely stored in an encrypted format within the SQLite database. An in-memory cache is explicitly avoided to minimize RAM usage on resource-constrained devices. A proactive background job periodically refreshes these sessions to ensure they remain active, maximizing reliability for time-critical bookings.
+*   **Secure Session Management:** Upon successful authentication, encrypted credentials are utilised to establish and maintain a secure session with the gym's website. Session-specific data (cookies, CSRF tokens) is securely stored in an encrypted format within the SQLite database. An in-memory cache is explicitly avoided to minimise RAM usage on resource-constrained devices. A proactive background job periodically refreshes these sessions to ensure they remain active, maximizing reliability for time-critical bookings.
 *   **Strict Access Control:** Encrypted user passwords can only be accessed and decrypted by the automated booking system when strictly necessary to perform booking or scraping operations on behalf of the user.
 *   **Rate Limiting:** The login endpoint is protected with rate limiting, mitigating the risk of brute-force password guessing attacks.
 
@@ -30,11 +31,11 @@ The application is designed with a decoupled architecture to ensure stability an
 
 -   **`app.py`**: The core Flask web application. Its sole responsibility is to handle incoming API requests from the client. It does not run any background jobs itself.
 -   **`scheduler_runner.py`**: A standalone, dedicated process that runs the APScheduler for all background tasks. It uses a thread pool to execute jobs concurrently, which is critical for handling multiple auto-booking requests for the same class without delays.
--   **`logging_config.py`**: A centralized module that provides a consistent logging format for both the web server and the scheduler processes.
+-   **`logging_config.py`**: A centralised module that provides a consistent logging format for both the web server and the scheduler processes.
 -   **`scraper.py`**: A robust web scraping client that handles all interactions with the gym's website, including advanced headers to mimic a real browser and prevent blocking.
 -   **`static_timetable.json`**: Stores a static version of the gym's timetable, used as a fallback or for quick lookups.
--   **Proactive Session Refresh:** A dedicated scheduler job (`refresh_sessions`) runs periodically (every 2 hours) to ensure all active user sessions with the gym's website remain valid. This minimizes the risk of session expiration during critical booking windows.
--   **Asynchronous & Non-Blocking Booking Logic**: The core auto-booking process has been heavily optimized for speed and reliability. The previous "pre-warming" step has been removed in favor of the proactive session refresh. Furthermore, I/O-intensive operations like writing debug HTML files upon failure are now handled by a dedicated, non-blocking background thread. This ensures that the main booking process is never delayed by slow disk operations, maximizing the chances of successfully booking a spot in a competitive, time-sensitive environment.
+-   **Proactive Session Refresh:** A dedicated scheduler job (`refresh_sessions`) runs periodically (every 2 hours) to ensure all active user sessions with the gym's website remain valid. This minimises the risk of session expiration during critical booking windows.
+-   **Asynchronous & Non-Blocking Booking Logic**: The core auto-booking process has been heavily optimised for speed and reliability. The previous "pre-warming" step has been removed in favour of the proactive session refresh. Furthermore, I/O-intensive operations like writing debug HTML files upon failure are now handled by a dedicated, non-blocking background thread. This ensures that the main booking process is never delayed by slow disk operations, maximising the chances of successfully booking a spot in a competitive, time-sensitive environment.
 
 ## Setup and Installation
 
