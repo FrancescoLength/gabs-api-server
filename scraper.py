@@ -242,7 +242,7 @@ class Scraper:
     def _get_classes_for_single_date(
             self, target_date_str: str) -> Dict[str, Any]:
         """Helper method to fetch class HTML for a single date."""
-        time.sleep(random.uniform(1, 2))
+        # time.sleep(random.uniform(1, 2))  # Removed for performance optimization
         if self.disabled_until and datetime.now() < self.disabled_until:
             raise Exception(
                 f"Scraper for {self.username} is temporarily disabled.")
@@ -338,9 +338,10 @@ class Scraper:
                                    is_retry: bool = False) -> Dict[str,
                                                                    Any]:
         """Helper method that finds and books a class."""
-        self.csrf_token = self._get_csrf_token()  # Refresh CSRF token
-        if not self.csrf_token:
-            raise Exception("Could not get a fresh CSRF token for booking.")
+        # Deferred CSRF token fetch until match is found to save time
+        # self.csrf_token = self._get_csrf_token()  # Refresh CSRF token
+        # if not self.csrf_token:
+        #     raise Exception("Could not get a fresh CSRF token for booking.")
 
         soup = BeautifulSoup(classes_html, 'html.parser')
         gym_classes = soup.find_all('div', {'class': 'class grid'})
@@ -353,6 +354,10 @@ class Scraper:
             start_time_span = gym_class.find('span', {'itemprop': 'startDate'})
             start_time_str = start_time_span.text.strip() if start_time_span else ""
 
+            # OPTIMIZATION: Check time first before expensive parsing
+            if start_time_str != target_time:
+                continue
+
             title_tag = gym_class.find('h2', {'class': 'title'})
             title = title_tag.text.strip() if title_tag else ""
 
@@ -361,27 +366,26 @@ class Scraper:
                 logging.info(f"Skipping virtual class: '{title}'")
                 continue
 
-            instructor_from_html = ""
-            p_tags = gym_class.find_all('p')  # type: ignore
-            for p in p_tags:
-                if p.text.lower().strip().startswith('with '):
-                    instructor_from_html = p.text.strip()[5:].replace('.', '')
-                    break
+            # Match by name and instructor (time is already matched)
+            name_score = fuzz.ratio(class_name.lower(), title.lower())
 
-            # Match by time, then fuzzy match name and instructor
-            if start_time_str == target_time:
-                name_score = fuzz.ratio(class_name.lower(), title.lower())
+            if target_instructor:
+                instructor_from_html = ""
+                p_tags = gym_class.find_all('p')  # type: ignore
+                for p in p_tags:
+                    if p.text.lower().strip().startswith('with '):
+                        instructor_from_html = p.text.strip()[5:].replace('.', '')
+                        break
 
-                if target_instructor:
-                    instructor_score = fuzz.ratio(
-                        target_instructor.lower(), instructor_from_html.lower())
-                    score = (name_score * 0.7) + (instructor_score * 0.3)
-                else:
-                    score = name_score
+                instructor_score = fuzz.ratio(
+                    target_instructor.lower(), instructor_from_html.lower())
+                score = (name_score * 0.7) + (instructor_score * 0.3)
+            else:
+                score = name_score
 
-                if score > highest_score:
-                    highest_score = score
-                    best_match_element = gym_class
+            if score > highest_score:
+                highest_score = score
+                best_match_element = gym_class
 
         # Second pass: execute booking for the best match found
         # Extract title here so it's available in the else block
@@ -434,6 +438,12 @@ class Scraper:
                 'id': class_id_input.get('value'),
                 'timestamp': timestamp_input.get('value'),
             }
+
+            # Fetch CSRF token here, only if we are actually booking
+            self.csrf_token = self._get_csrf_token()  # Refresh CSRF token
+            if not self.csrf_token:
+                raise Exception("Could not get a fresh CSRF token for booking.")
+
             headers = {
                 **self.base_headers,
                 'X-Winter-Request-Handler': handler,
