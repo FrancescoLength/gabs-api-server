@@ -161,13 +161,21 @@ class Scraper:
             }
 
             headers = {
+                **self.base_headers,
                 'x-csrf-token': self.csrf_token,
+                'X-Winter-Request-Handler': 'onSignin',
             }
             response = self.session.post(
                 LOGIN_URL, data=payload, headers=headers)
             response.raise_for_status()
 
-            if response.json().get("X_WINTER_REDIRECT"):
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError:
+                logging.error(f"Login response for {self.username} was not valid JSON. Status: {response.status_code}. Content preview: {response.text[:1000]}")
+                raise Exception(f"Login failed. Server returned non-JSON response (likely HTML error page).")
+
+            if response_data.get("X_WINTER_REDIRECT"):
                 logging.info(f"Login successful for {self.username}!")
                 self.relogin_failures = 0
                 self.disabled_until = None
