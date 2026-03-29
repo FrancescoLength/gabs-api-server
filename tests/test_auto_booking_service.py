@@ -248,7 +248,7 @@ def test_process_auto_bookings_job_scraper_not_found(memory_db, mocker):
     # Setup
     username = "test_user"
     class_name = "No Scraper Class"
-    target_time = "13:00"
+    target_time = (datetime.now() + timedelta(minutes=5)).strftime("%H:%M")
     day_of_week = datetime.now().strftime("%A")
 
     booking_id = database.add_auto_booking(
@@ -277,7 +277,7 @@ def test_process_auto_bookings_job_scraper_not_found_max_retries(
     # Setup
     username = "test_user"
     class_name = "No Scraper Class Max Retries"
-    target_time = "13:00"
+    target_time = (datetime.now() + timedelta(minutes=5)).strftime("%H:%M")
     day_of_week = datetime.now().strftime("%A")
 
     booking_id = database.add_auto_booking(
