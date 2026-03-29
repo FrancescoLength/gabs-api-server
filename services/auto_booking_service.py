@@ -18,10 +18,12 @@ try:
     from .. import database
     from .. import config
     from ..scraper import Scraper, SessionExpiredError
+    from ..task_logger import set_task_context, clear_task_context
 except ImportError:
     import database
     import config
     from scraper import Scraper, SessionExpiredError
+    from task_logger import set_task_context, clear_task_context
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,11 @@ def _process_single_booking(
                 booking_id, username, class_name, target_time, status, created_at,
                 last_attempt_at, retry_count, day_of_week, instructor, last_booked_date
             ) = booking_details
+
+            # Set task context for this thread so all logs are grouped
+            set_task_context('auto_booking', user=username,
+                             class_name=class_name, time=target_time,
+                             auto_booking_id=booking_id)
 
             today = datetime.now()
             days_of_week_map = {

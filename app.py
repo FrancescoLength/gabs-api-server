@@ -24,6 +24,7 @@ try:
     from . import crypto
     from .services import auto_booking_service
     from .logging_config import setup_logging, LOG_FILE
+    from .task_logger import set_task_context, clear_task_context
 except ImportError:
     from scraper import Scraper, SessionExpiredError
     import config
@@ -31,6 +32,7 @@ except ImportError:
     import crypto
     from services import auto_booking_service
     from logging_config import setup_logging, LOG_FILE
+    from task_logger import set_task_context, clear_task_context
 
 from pywebpush import webpush
 
@@ -199,6 +201,7 @@ def process_auto_bookings() -> None:
 
 def send_cancellation_reminders() -> None:
     with app.app_context():
+        set_task_context('cancellation_reminder')
         logging.info("Running send_cancellation_reminders job.")
         live_bookings_to_remind: List[Tuple] = database.get_live_bookings_for_reminder(
         )
@@ -288,6 +291,7 @@ def send_cancellation_reminders() -> None:
 
 def reset_failed_bookings() -> None:
     with app.app_context():
+        set_task_context('reset_failed')
         logging.info("Running reset_failed_bookings job.")
         stuck_bookings: List[Tuple] = database.get_stuck_bookings()
         now_timestamp: int = int(datetime.now().timestamp())
@@ -317,6 +321,7 @@ def refresh_sessions() -> None:
     Proactively refreshes all user sessions and syncs their live bookings.
     """
     with app.app_context():
+        set_task_context('session_refresh')
         users: List[str] = database.get_all_users()
         if not users:
             logging.info(
@@ -423,6 +428,7 @@ def login_user() -> Tuple[Any, int]:
         return jsonify({"error": "Username and password required"}), 400
 
     try:
+        set_task_context('login', user=username)
         logging.info(f"Login attempt for user: {username}")
         user_scraper: Optional[Scraper] = get_scraper_instance(
             username, password)
@@ -441,6 +447,7 @@ def login_user() -> Tuple[Any, int]:
 @jwt_required()
 def logout_user() -> Tuple[Any, int]:
     current_user: str = get_jwt_identity()  # type: ignore
+    set_task_context('logout', user=current_user)
     database.delete_session(current_user)
     logging.info(f"Removed session for user: {current_user}")
     return jsonify({"message": "Successfully logged out"}), 200
@@ -542,6 +549,8 @@ def book_class(user_scraper: Scraper) -> Tuple[Any, int]:
         return jsonify(
             {"error": "class_name, date, and time are required."}), 400
 
+    set_task_context('manual_booking', user=user_scraper.username,
+                     class_name=class_name, date=target_date, time=target_time)
     logging.info(
         f"User {
             user_scraper.username} attempting to book class {class_name} on {target_date} at {target_time}")
@@ -564,6 +573,8 @@ def cancel_booking(user_scraper: Scraper) -> Tuple[Any, int]:
         return jsonify(
             {"error": "class_name, date, and time are required."}), 400
 
+    set_task_context('manual_cancel', user=user_scraper.username,
+                     class_name=class_name, date=target_date, time=target_time)
     logging.info(
         f"User {
             user_scraper.username} attempting to cancel class {class_name} on {target_date} at {target_time}")
@@ -818,6 +829,7 @@ def subscribe_push() -> Tuple[Any, int]:
         return jsonify({"error": "Subscription info is required."}), 400
 
     try:
+        set_task_context('push_subscribe', user=current_user)
         database.save_push_subscription(current_user, subscription_info)
         logging.info(f"Push subscription saved for user: {current_user}")
         return jsonify({"message": "Push subscription successful"}), 201
@@ -844,30 +856,59 @@ def health_check() -> Tuple[Any, int]:
 @app.route('/api/admin/logs', methods=['GET'])
 @admin_required
 def get_logs() -> Tuple[Any, int]:
-    log_pattern: re.Pattern[str] = re.compile(r'^(\S+ \S+) - (\w+) - (.*)')
+    legacy_pattern: re.Pattern[str] = re.compile(r'^(\S+ \S+) - (\w+) - (.*)')
     try:
         with open(LOG_FILE, 'r') as f:
             lines: List[str] = f.readlines()
-            parsed_logs: List[Dict[str, str]] = []
-            for line in reversed(lines[-100:]):
-                match: Optional[re.Match[str]
-                                ] = log_pattern.match(line.strip())
+            parsed_logs: List[Dict[str, Any]] = []
+            for line in reversed(lines[-200:]):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                # Try JSON format first (new structured logs)
+                if stripped.startswith('{'):
+                    try:
+                        entry = json.loads(stripped)
+                        parsed_logs.append({
+                            "timestamp": entry.get('ts', ''),
+                            "level": entry.get('level', 'INFO'),
+                            "message": entry.get('msg', ''),
+                            "task_id": entry.get('task_id', ''),
+                            "scenario": entry.get('scenario', ''),
+                            "user": entry.get('user', ''),
+                            "class_name": entry.get('class', ''),
+                            "date": entry.get('date', ''),
+                            "time": entry.get('time', ''),
+                        })
+                        continue
+                    except json.JSONDecodeError:
+                        pass
+                # Fallback to legacy text format
+                match: Optional[re.Match[str]] = legacy_pattern.match(stripped)
                 if match:
                     parsed_logs.append({
                         "timestamp": match.group(1),
                         "level": match.group(2),
-                        "message": match.group(3)
+                        "message": match.group(3),
+                        "task_id": "",
+                        "scenario": "",
+                        "user": "",
+                        "class_name": "",
+                        "date": "",
+                        "time": "",
                     })
-                elif line.strip():
-                    if parsed_logs and parsed_logs[-1]['level'] in [
-                            'RAW', 'RAW_MULTI']:
-                        parsed_logs[-1]['message'] += '\n' + line.strip()
-                    else:
-                        parsed_logs.append({
-                            "timestamp": "",
-                            "level": "RAW",
-                            "message": line.strip()
-                        })
+                else:
+                    parsed_logs.append({
+                        "timestamp": "",
+                        "level": "RAW",
+                        "message": stripped,
+                        "task_id": "",
+                        "scenario": "",
+                        "user": "",
+                        "class_name": "",
+                        "date": "",
+                        "time": "",
+                    })
             return jsonify({"logs": parsed_logs}), 200
     except FileNotFoundError:
         return jsonify({"error": "Log file not found."}), 404

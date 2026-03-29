@@ -2,6 +2,11 @@ import logging
 from logging.handlers import RotatingFileHandler
 import sys
 
+try:
+    from .task_logger import TaskContextFilter, JSONFormatter, HumanReadableFormatter
+except ImportError:
+    from task_logger import TaskContextFilter, JSONFormatter, HumanReadableFormatter
+
 LOG_FILE = 'gabs_api.log'
 
 
@@ -21,21 +26,25 @@ def setup_logging():
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-    log_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s')
+    # Task context filter — injects task_id, scenario, user, etc.
+    task_filter = TaskContextFilter()
 
-    # File handler
+    # File handler — JSON Lines format (machine-readable)
+    json_formatter = JSONFormatter()
     file_handler = RotatingFileHandler(
         LOG_FILE, maxBytes=1024 * 1024 * 5, backupCount=2)
-    file_handler.setFormatter(log_formatter)
+    file_handler.setFormatter(json_formatter)
     file_handler.setLevel(logging.INFO)
     file_handler.addFilter(NoCancellationFilter())
+    file_handler.addFilter(task_filter)
 
-    # Console handler
+    # Console handler — human-readable format
+    console_formatter = HumanReadableFormatter()
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(log_formatter)
+    console_handler.setFormatter(console_formatter)
     console_handler.setLevel(logging.INFO)
     console_handler.addFilter(NoCancellationFilter())
+    console_handler.addFilter(task_filter)
 
     root_logger.setLevel(logging.INFO)
     root_logger.addHandler(file_handler)
