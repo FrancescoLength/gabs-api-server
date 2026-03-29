@@ -23,6 +23,7 @@ try:
     from . import database
     from . import crypto
     from .services import auto_booking_service
+    from .services import notification_service
     from .logging_config import setup_logging, LOG_FILE
     from .task_logger import set_task_context, clear_task_context
 except ImportError:
@@ -31,10 +32,10 @@ except ImportError:
     import database
     import crypto
     from services import auto_booking_service
+    from services import notification_service
     from logging_config import setup_logging, LOG_FILE
     from task_logger import set_task_context, clear_task_context
 
-from pywebpush import webpush
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -161,31 +162,6 @@ jobstores: Dict[str, SQLAlchemyJobStore] = {
 }
 scheduler = BackgroundScheduler(jobstores=jobstores)
 
-def send_push_to_user(username: str, title: str, body: str,
-                      tag: str = "general", url: str = "/") -> None:
-    """Send a push notification to all subscribed devices of a user."""
-    subscriptions = database.get_push_subscriptions_for_user(username)
-    for sub in subscriptions:
-        try:
-            webpush(
-                subscription_info=sub,
-                data=json.dumps({
-                    "title": title,
-                    "body": body,
-                    "icon": "/favicon.png",
-                    "badge": "/favicon.png",
-                    "tag": tag,
-                    "url": url
-                }),
-                vapid_private_key=config.VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": f"mailto:{config.VAPID_ADMIN_EMAIL}"}
-            )
-        except Exception as e:
-            logging.error(f"Error sending push to {username}: {e}")
-            if "410" in str(e):
-                database.delete_push_subscription(sub['endpoint'])
-
-
 # Wrapper function for the moved auto-booking processing logic
 
 
@@ -195,98 +171,8 @@ def process_auto_bookings() -> None:
         debug_writer_queue_instance=debug_writer_queue,
         get_scraper_instance_func=get_scraper_instance,
         handle_session_expiration_func=handle_session_expiration,
-        send_push_func=send_push_to_user
+        send_push_func=notification_service.send_push_notification
     )
-
-
-def send_cancellation_reminders() -> None:
-    with app.app_context():
-        set_task_context('cancellation_reminder')
-        logging.info("Running send_cancellation_reminders job.")
-        live_bookings_to_remind: List[Tuple] = database.get_live_bookings_for_reminder(
-        )
-        now: datetime = datetime.now()
-
-        for booking in live_bookings_to_remind:
-            booking_id: int = booking[0]  # type: ignore
-            username: str = booking[1]  # type: ignore
-            class_name: str = booking[2]  # type: ignore
-            class_date_str: str = booking[3]  # type: ignore
-            class_time_str: str = booking[4]  # type: ignore
-            # instructor: Optional[str] = booking[5]  # type: ignore
-
-            class_datetime: datetime = datetime.strptime(
-                f"{class_date_str} {class_time_str}", "%Y-%m-%d %H:%M")
-
-            time_until_class: timedelta = class_datetime - now
-
-            # Define the reminder window: exactly 3 hours and 30 minutes before
-            # the class
-
-            # Check if current time is within a small window around the reminder_threshold
-            # To avoid missing the exact second, we check a small interval,
-            # e.g., +/- 1 minute
-            if timedelta(
-                    hours=3,
-                    minutes=25) <= time_until_class <= timedelta(
-                    hours=3,
-                    minutes=35):
-                logging.info(
-                    f"Sending cancellation reminder for live booking ID {booking_id} for user {username}.")
-                subscriptions: List[Dict[str, Any]] = database.get_push_subscriptions_for_user(
-                    username)
-
-                # Mark as sent BEFORE sending to prevent duplicate sends
-                # from overlapping job executions
-                database.update_live_booking_reminder_status(
-                    booking_id, reminder_sent=1)
-
-                if subscriptions:
-                    for sub in subscriptions:
-                        try:
-                            webpush(
-                                subscription_info=sub,
-                                data=json.dumps({
-                                    "title": "GABS Reminder",
-                                    "body": (
-                                        f"If today you can't make {class_name} class at {class_time_str}, "
-                                        "don't forget to cancel it within ~30 minutes!"
-                                    ),
-                                    "icon": "/favicon.png",
-                                    "badge": "/favicon.png",
-                                    "tag": f"cancellation-reminder-{booking_id}",
-                                    "url": "/live-booking"
-                                }),
-                                vapid_private_key=config.VAPID_PRIVATE_KEY,  # type: ignore
-                                # type: ignore
-                                vapid_claims={
-                                    "sub": f"mailto:{config.VAPID_ADMIN_EMAIL}"}
-                            )
-                        except Exception as e:
-                            logging.error(
-                                f"Error sending cancellation reminder to {username} for live booking ID {booking_id}: {e}")
-                            # GONE status, subscription is no longer valid
-                            if "410" in str(e):
-                                database.delete_push_subscription(
-                                    sub['endpoint'])
-                                logging.info(
-                                    f"Deleted invalid push subscription for user {username}: {
-                                        sub['endpoint']}")
-
-                    logging.info(
-                        f"Cancellation reminder sent to {username} for live booking ID {booking_id} "
-                        f"({len(subscriptions)} device(s)).")
-                else:
-                    logging.info(
-                        f"No push subscriptions found for {username} for live booking ID {booking_id}. "
-                        f"Marking reminder as sent.")
-                    database.update_live_booking_reminder_status(
-                        booking_id, reminder_sent=1)
-
-            else:
-                logging.debug(
-                    f"Live booking ID {booking_id} for {username} not within cancellation reminder window. "
-                    f"Time until class: {time_until_class}")
 
 
 def reset_failed_bookings() -> None:

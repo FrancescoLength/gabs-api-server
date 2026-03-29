@@ -12,7 +12,6 @@ SCHEDULER_TIMEZONE = ZoneInfo('Europe/London')
 
 try:
     from .app import (
-        send_cancellation_reminders,
         reset_failed_bookings,
         refresh_sessions,
         app,
@@ -21,10 +20,11 @@ try:
         handle_session_expiration)
     from . import database
     from .services.auto_booking_service import process_auto_bookings_job
+    from .services.notification_service import process_cancellation_reminders
+    from .task_logger import set_task_context, clear_task_context
     from .logging_config import setup_logging
 except ImportError:
     from app import (
-        send_cancellation_reminders,
         reset_failed_bookings,
         refresh_sessions,
         app,
@@ -33,6 +33,8 @@ except ImportError:
         handle_session_expiration)
     import database
     from services.auto_booking_service import process_auto_bookings_job
+    from services.notification_service import process_cancellation_reminders
+    from task_logger import set_task_context, clear_task_context
     from logging_config import setup_logging
 
 # Configure logging
@@ -63,6 +65,15 @@ def run_process_auto_bookings():
         get_scraper_instance_func=get_scraper_instance,
         handle_session_expiration_func=handle_session_expiration
     )
+
+def run_process_cancellation_reminders():
+    with app.app_context():
+        set_task_context('cancellation_reminder')
+        logger.info("Running send_cancellation_reminders job.")
+        try:
+            process_cancellation_reminders()
+        finally:
+            clear_task_context()
 
 
 def run_scheduler():
@@ -98,7 +109,7 @@ def run_scheduler():
 
     # The cancellation reminder job, runs every 5 minutes.
     scheduler.add_job(
-        send_cancellation_reminders,
+        run_process_cancellation_reminders,
         'cron',
         minute='*/5',
         second=1,
