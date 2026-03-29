@@ -2,10 +2,13 @@ import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
+from pytz import timezone
 import time
 import signal
 import sys
 from typing import Dict
+
+SCHEDULER_TIMEZONE = timezone('Europe/London')
 
 try:
     from .app import (
@@ -76,7 +79,8 @@ def run_scheduler():
         'default': ThreadPoolExecutor(2)
     }
 
-    scheduler = BackgroundScheduler(jobstores=jobstores, executors=executors)
+    scheduler = BackgroundScheduler(
+        jobstores=jobstores, executors=executors, timezone=SCHEDULER_TIMEZONE)
 
     # Add jobs to the scheduler using cron triggers for precise timing.
 
@@ -89,7 +93,8 @@ def run_scheduler():
         second=1,
         id='auto_booking_processor',
         replace_existing=True,
-        max_instances=1)
+        max_instances=1,
+        misfire_grace_time=60)
 
     # The cancellation reminder job, runs every 5 minutes.
     scheduler.add_job(
@@ -110,11 +115,13 @@ def run_scheduler():
         minute=0,
         second=1,
         id='reset_failed_bookings_job',
-        replace_existing=True)
+        replace_existing=True,
+        misfire_grace_time=300)
 
     # Proactively refresh all user sessions every 2 hours.
     scheduler.add_job(refresh_sessions, 'cron', hour='*/2', minute=0,
-                      second=1, id='session_refresher', replace_existing=True)
+                      second=1, id='session_refresher', replace_existing=True,
+                      misfire_grace_time=120)
 
     scheduler.start()
     logger.info("Scheduler started and running.")

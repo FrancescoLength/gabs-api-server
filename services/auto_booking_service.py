@@ -30,11 +30,15 @@ SessionExpirationHandler = Callable[[str], None]
 DebugWriterQueue = queue.Queue
 
 
+SendPushFunc = Callable[[str, str, str, str, str], None]
+
+
 def process_auto_bookings_job(
     app_instance: Any,  # Flask app instance for app_context
     debug_writer_queue_instance: DebugWriterQueue,
     get_scraper_instance_func: ScraperInstanceGetter,
-    handle_session_expiration_func: SessionExpirationHandler
+    handle_session_expiration_func: SessionExpirationHandler,
+    send_push_func: Optional[SendPushFunc] = None
 ) -> None:
     """
     Processes all pending auto-bookings, attempting to book classes
@@ -126,6 +130,19 @@ def process_auto_bookings_job(
                                      today.weekday() + 7) % 7
                 next_occurrence_date = today + \
                     timedelta(days=days_until_target)
+
+                # If target day is today but the class time has already passed,
+                # skip to next week's occurrence
+                if days_until_target == 0:
+                    try:
+                        target_today_datetime = datetime.strptime(
+                            f"{next_occurrence_date.strftime('%Y-%m-%d')} {target_time}",
+                            "%Y-%m-%d %H:%M")
+                        if target_today_datetime < today:
+                            next_occurrence_date = today + timedelta(days=7)
+                    except ValueError:
+                        pass  # Will be caught by the later validation
+
                 current_target_date = next_occurrence_date.strftime("%Y-%m-%d")
 
                 # If this class was already booked for this date, just reset
@@ -176,6 +193,15 @@ def process_auto_bookings_job(
                         logger.error(
                             f"Scraper session for {username} not found after {new_retry_count} attempts. "
                             f"Marking auto-booking {booking_id} as failed.")
+                        if send_push_func:
+                            send_push_func(
+                                username,
+                                "GABS Auto-Booking Failed",
+                                f"Your auto-booking for {class_name} on {day_of_week} at {target_time} "
+                                f"failed because your session expired. Please log in again to re-enable it.",
+                                f"auto-booking-failed-{booking_id}",
+                                "/auto-booking"
+                            )
                     continue
 
                 logger.info(

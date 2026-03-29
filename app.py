@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -158,6 +159,31 @@ jobstores: Dict[str, SQLAlchemyJobStore] = {
 }
 scheduler = BackgroundScheduler(jobstores=jobstores)
 
+def send_push_to_user(username: str, title: str, body: str,
+                      tag: str = "general", url: str = "/") -> None:
+    """Send a push notification to all subscribed devices of a user."""
+    subscriptions = database.get_push_subscriptions_for_user(username)
+    for sub in subscriptions:
+        try:
+            webpush(
+                subscription_info=sub,
+                data=json.dumps({
+                    "title": title,
+                    "body": body,
+                    "icon": "/favicon.png",
+                    "badge": "/favicon.png",
+                    "tag": tag,
+                    "url": url
+                }),
+                vapid_private_key=config.VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": f"mailto:{config.VAPID_ADMIN_EMAIL}"}
+            )
+        except Exception as e:
+            logging.error(f"Error sending push to {username}: {e}")
+            if "410" in str(e):
+                database.delete_push_subscription(sub['endpoint'])
+
+
 # Wrapper function for the moved auto-booking processing logic
 
 
@@ -166,7 +192,8 @@ def process_auto_bookings() -> None:
         app_instance=app,
         debug_writer_queue_instance=debug_writer_queue,
         get_scraper_instance_func=get_scraper_instance,
-        handle_session_expiration_func=handle_session_expiration
+        handle_session_expiration_func=handle_session_expiration,
+        send_push_func=send_push_to_user
     )
 
 
@@ -206,6 +233,11 @@ def send_cancellation_reminders() -> None:
                 subscriptions: List[Dict[str, Any]] = database.get_push_subscriptions_for_user(
                     username)
 
+                # Mark as sent BEFORE sending to prevent duplicate sends
+                # from overlapping job executions
+                database.update_live_booking_reminder_status(
+                    booking_id, reminder_sent=1)
+
                 if subscriptions:
                     for sub in subscriptions:
                         try:
@@ -227,10 +259,6 @@ def send_cancellation_reminders() -> None:
                                 vapid_claims={
                                     "sub": f"mailto:{config.VAPID_ADMIN_EMAIL}"}
                             )
-                            logging.info(
-                                f"Cancellation reminder sent to {username} for live booking ID {booking_id}.")
-                            database.update_live_booking_reminder_status(
-                                booking_id, reminder_sent=1)
                         except Exception as e:
                             logging.error(
                                 f"Error sending cancellation reminder to {username} for live booking ID {booking_id}: {e}")
@@ -241,6 +269,10 @@ def send_cancellation_reminders() -> None:
                                 logging.info(
                                     f"Deleted invalid push subscription for user {username}: {
                                         sub['endpoint']}")
+
+                    logging.info(
+                        f"Cancellation reminder sent to {username} for live booking ID {booking_id} "
+                        f"({len(subscriptions)} device(s)).")
                 else:
                     logging.info(
                         f"No push subscriptions found for {username} for live booking ID {booking_id}. "
@@ -292,28 +324,39 @@ def refresh_sessions() -> None:
             return
 
         for username in users:
-            try:
-                scraper: Optional[Scraper] = get_scraper_instance(username)
-                if scraper:
-                    # Perform a lightweight, safe operation to check session
-                    # validity
-                    bookings: List[Dict[str, Any]] = scraper.get_my_bookings()
-                    # Session is valid, so we touch the timestamp
-                    database.touch_session(username)
-                    sync_live_bookings(username, bookings)
-                    logging.debug(
-                        f"Session for {username} is valid and bookings synced.")
-                else:
-                    logging.warning(
-                        f"Could not get scraper instance for {username} during session refresh.")
-            except SessionExpiredError:
-                # The decorator on the scraper method already handled the
-                # re-login
-                logging.info(
-                    f"Session for {username} was expired and has been refreshed by the scraper.")
-            except Exception as e:
-                logging.error(
-                    f"An unexpected error occurred while refreshing session for {username}: {e}")
+            max_retries = 2
+            for attempt in range(max_retries + 1):
+                try:
+                    scraper: Optional[Scraper] = get_scraper_instance(username)
+                    if scraper:
+                        bookings: List[Dict[str, Any]] = scraper.get_my_bookings()
+                        database.touch_session(username)
+                        sync_live_bookings(username, bookings)
+                        logging.debug(
+                            f"Session for {username} is valid and bookings synced.")
+                    else:
+                        logging.warning(
+                            f"Could not get scraper instance for {username} during session refresh.")
+                    break  # Success or no scraper, move to next user
+                except SessionExpiredError:
+                    logging.info(
+                        f"Session for {username} was expired and has been refreshed by the scraper.")
+                    break
+                except (requests.exceptions.ConnectionError,
+                        requests.exceptions.Timeout) as e:
+                    if attempt < max_retries:
+                        logging.warning(
+                            f"Transient network error refreshing session for {username} "
+                            f"(attempt {attempt + 1}/{max_retries + 1}): {e}")
+                        time.sleep(5 * (attempt + 1))
+                    else:
+                        logging.error(
+                            f"Network error refreshing session for {username} after "
+                            f"{max_retries + 1} attempts: {e}")
+                except Exception as e:
+                    logging.error(
+                        f"An unexpected error occurred while refreshing session for {username}: {e}")
+                    break
 
 
 app.config["JWT_SECRET_KEY"] = config.JWT_SECRET_KEY  # type: ignore

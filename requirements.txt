@@ -5,6 +5,7 @@ requests
 beautifulsoup4
 Flask-JWT-Extended
 APScheduler
+pytz
 thefuzz
 pywebpush
 SQLAlchemy
