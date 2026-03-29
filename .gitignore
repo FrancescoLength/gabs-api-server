@@ -17,3 +17,5 @@ auto_bookings.db
 gabs_api.log
 .coverage
 auto_bookings.db.bak
+# Ignore test script
+tests/booking_test.py
