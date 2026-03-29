@@ -1,8 +1,8 @@
 import pytest
 import requests
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, call
 from datetime import datetime, timedelta, date
-from gabs_api_server.scraper import Scraper, SessionExpiredError, handle_session_expiry
+from gabs_api_server.scraper import Scraper, SessionExpiredError, handle_session_expiry, REQUEST_TIMEOUT
 
 # --- Fixtures ---
 
@@ -48,6 +48,34 @@ def test_init_with_session_data(mocker):
     scraper = Scraper("user", "pass", session_data=session_data)
     assert scraper.csrf_token == 'token'
     assert scraper.session.cookies.get('cookie') == 'yum'
+
+# --- Tests for REQUEST_TIMEOUT ---
+
+
+def test_request_timeout_on_csrf_fetch(scraper_mock):
+    """Verify that _get_csrf_token passes timeout to session.get."""
+    html = '<html><head><meta name="csrf-token" content="tok"></head></html>'
+    mock_response = MagicMock()
+    mock_response.text = html
+    scraper_mock.session.get.return_value = mock_response
+
+    scraper_mock._get_csrf_token()
+    scraper_mock.session.get.assert_called_once()
+    _, kwargs = scraper_mock.session.get.call_args
+    assert kwargs.get('timeout') == REQUEST_TIMEOUT
+
+
+def test_request_timeout_on_get_my_bookings(scraper_mock):
+    """Verify that get_my_bookings passes timeout to session.get."""
+    mock_response = MagicMock()
+    mock_response.url = "https://example.com/members"
+    mock_response.text = '<div class="container">'
+    scraper_mock.session.get.return_value = mock_response
+
+    scraper_mock.get_my_bookings()
+    _, kwargs = scraper_mock.session.get.call_args
+    assert kwargs.get('timeout') == REQUEST_TIMEOUT
+
 
 # --- Tests for _get_csrf_token ---
 
@@ -583,3 +611,39 @@ def test_find_and_book_class_match_not_found(scraper_mock, mocker):
 
     assert result['status'] == 'error'
     assert "Could not find a suitable match" in result['message']
+
+
+def test_no_extra_csrf_fetch_during_booking(scraper_mock, mocker):
+    """Verify _get_csrf_token is NOT called inside _parse_and_execute_booking.
+    The CSRF token from _get_classes_for_single_date should be reused."""
+    html = """
+    <div class="class grid">
+        <h2 class="title">Test Class</h2>
+        <p>with Test Instructor</p>
+        <span itemprop="startDate">10:00</span>
+        <form data-request="onBook">
+            <input name="id" value="123">
+            <input name="timestamp" value="456">
+            <button type="submit" class="signup"></button>
+        </form>
+    </div>
+    """
+    mock_get_classes = mocker.patch.object(
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={"@events": html})
+    mock_csrf = mocker.patch.object(
+        scraper_mock, '_get_csrf_token', return_value="fresh")
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {'status': 'success'}
+    mock_response.text = "success"
+    scraper_mock.session.post.return_value = mock_response
+
+    result = scraper_mock.find_and_book_class(
+        "2025-01-01", "Test Class", "10:00", "Test Instructor")
+
+    assert result['status'] == 'success'
+    # _get_csrf_token should never be called — CSRF token is reused from
+    # _get_classes_for_single_date which sets it internally
+    mock_csrf.assert_not_called()

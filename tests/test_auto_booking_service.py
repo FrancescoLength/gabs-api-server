@@ -1,5 +1,8 @@
+import threading
 from datetime import datetime, timedelta
-from gabs_api_server.services.auto_booking_service import process_auto_bookings_job
+from unittest.mock import Mock
+from gabs_api_server.services.auto_booking_service import (
+    process_auto_bookings_job, _process_single_booking, MAX_BOOKING_WORKERS)
 from gabs_api_server.app import app, debug_writer_queue, handle_session_expiration
 from gabs_api_server import database, config
 from gabs_api_server.scraper import SessionExpiredError
@@ -379,3 +382,144 @@ def test_process_auto_bookings_job_generic_exception(memory_db, mocker):
     # Should be marked as pending for retry
     assert updated_booking[4] == 'pending'
     assert updated_booking[7] == 1  # retry_count should be 1 (first attempt)
+
+
+# --- Parallelization Tests ---
+
+
+def test_parallel_bookings_different_users(memory_db, mocker):
+    """Bookings for different users should be processed via ThreadPoolExecutor,
+    allowing their I/O waits to overlap."""
+    target_time = (datetime.now() + timedelta(minutes=5)).strftime("%H:%M")
+    day_of_week = datetime.now().strftime("%A")
+
+    # Create bookings for 3 different users
+    id1 = database.add_auto_booking("user_a", "ClassA", target_time, day_of_week, "inst")
+    id2 = database.add_auto_booking("user_b", "ClassB", target_time, day_of_week, "inst")
+    id3 = database.add_auto_booking("user_c", "ClassC", target_time, day_of_week, "inst")
+
+    # Track which threads process each user's booking
+    thread_ids = {}
+
+    original_process = _process_single_booking
+
+    def tracking_process(booking_summary, *args, **kwargs):
+        username = booking_summary[1]
+        thread_ids[username] = threading.current_thread().ident
+        return original_process(booking_summary, *args, **kwargs)
+
+    mocker.patch(
+        'gabs_api_server.services.auto_booking_service._process_single_booking',
+        side_effect=tracking_process)
+
+    # All scrapers return success
+    mock_scraper = mocker.Mock()
+    mock_scraper.find_and_book_class.return_value = {
+        "status": "success", "class_name": "Class",
+        "message": "Booking successful", "action": "booking", "html_content": ""}
+    mock_get_scraper = mocker.Mock(return_value=mock_scraper)
+
+    process_auto_bookings_job(
+        app_instance=app,
+        debug_writer_queue_instance=debug_writer_queue,
+        get_scraper_instance_func=mock_get_scraper,
+        handle_session_expiration_func=handle_session_expiration
+    )
+
+    # All 3 users should have been processed
+    assert len(thread_ids) == 3
+    assert set(thread_ids.keys()) == {"user_a", "user_b", "user_c"}
+
+    # Verify all bookings completed successfully
+    for bid in [id1, id2, id3]:
+        booking = database.get_auto_booking_by_id(bid)
+        assert booking[10] is not None  # last_booked_date set
+
+
+def test_parallel_same_user_stays_sequential(memory_db, mocker):
+    """Multiple bookings for the same user should run sequentially in one thread."""
+    target_time = (datetime.now() + timedelta(minutes=5)).strftime("%H:%M")
+    day_of_week = datetime.now().strftime("%A")
+
+    # Two bookings for the same user
+    id1 = database.add_auto_booking("same_user", "Class1", target_time, day_of_week, "inst")
+    id2 = database.add_auto_booking("same_user", "Class2", target_time, day_of_week, "inst")
+
+    # Track order and thread of processing
+    call_log = []
+
+    original_process = _process_single_booking
+
+    def tracking_process(booking_summary, *args, **kwargs):
+        call_log.append({
+            'booking_id': booking_summary[0],
+            'thread': threading.current_thread().ident
+        })
+        return original_process(booking_summary, *args, **kwargs)
+
+    mocker.patch(
+        'gabs_api_server.services.auto_booking_service._process_single_booking',
+        side_effect=tracking_process)
+
+    mock_scraper = mocker.Mock()
+    mock_scraper.find_and_book_class.return_value = {
+        "status": "success", "class_name": "Class",
+        "message": "Booking successful", "action": "booking", "html_content": ""}
+    mock_get_scraper = mocker.Mock(return_value=mock_scraper)
+
+    process_auto_bookings_job(
+        app_instance=app,
+        debug_writer_queue_instance=debug_writer_queue,
+        get_scraper_instance_func=mock_get_scraper,
+        handle_session_expiration_func=handle_session_expiration
+    )
+
+    # Both bookings should have been processed on the same thread
+    assert len(call_log) == 2
+    assert call_log[0]['thread'] == call_log[1]['thread']
+
+
+def test_parallel_error_isolation(memory_db, mocker):
+    """An error in one user's booking should not affect another user's booking."""
+    target_time = (datetime.now() + timedelta(minutes=5)).strftime("%H:%M")
+    day_of_week = datetime.now().strftime("%A")
+
+    id_good = database.add_auto_booking("good_user", "GoodClass", target_time, day_of_week, "inst")
+    id_bad = database.add_auto_booking("bad_user", "BadClass", target_time, day_of_week, "inst")
+
+    # Good user's scraper succeeds, bad user's scraper raises exception
+    good_scraper = mocker.Mock()
+    good_scraper.find_and_book_class.return_value = {
+        "status": "success", "class_name": "GoodClass",
+        "message": "Booking successful", "action": "booking", "html_content": ""}
+
+    bad_scraper = mocker.Mock()
+    bad_scraper.find_and_book_class.side_effect = Exception("Network failure")
+
+    def get_scraper(username, *args, **kwargs):
+        if username == "good_user":
+            return good_scraper
+        return bad_scraper
+
+    mock_get_scraper = mocker.Mock(side_effect=get_scraper)
+
+    process_auto_bookings_job(
+        app_instance=app,
+        debug_writer_queue_instance=debug_writer_queue,
+        get_scraper_instance_func=mock_get_scraper,
+        handle_session_expiration_func=handle_session_expiration
+    )
+
+    # Good user's booking should succeed regardless of bad user's failure
+    good_booking = database.get_auto_booking_by_id(id_good)
+    assert good_booking[10] is not None  # last_booked_date set (success)
+
+    # Bad user's booking should be marked for retry
+    bad_booking = database.get_auto_booking_by_id(id_bad)
+    assert bad_booking[4] == 'pending'  # Retry
+    assert bad_booking[7] == 1  # retry_count incremented
+
+
+def test_max_booking_workers_constant():
+    """Verify MAX_BOOKING_WORKERS is set to a sensible value for Pi Zero W."""
+    assert MAX_BOOKING_WORKERS == 3

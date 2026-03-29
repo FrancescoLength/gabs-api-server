@@ -28,6 +28,7 @@ BASE_URL = config.WEBSITE_URL or ""  # Type safety
 LOGIN_URL = BASE_URL + 'login'
 MEMBERS_URL = BASE_URL + 'members'
 BOOKING_URL = BASE_URL + 'book-classes'
+REQUEST_TIMEOUT = 30  # seconds - prevents threads from hanging indefinitely
 
 USER_AGENTS = [
     # Chrome on Windows
@@ -127,7 +128,7 @@ class Scraper:
                 'Accept-Language': 'en-US,en;q=0.9',
                 'Accept-Encoding': 'gzip, deflate, br',
             }
-            response = self.session.get(LOGIN_URL, headers=headers)
+            response = self.session.get(LOGIN_URL, headers=headers, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             token_tag = soup.find('meta', {'name': 'csrf-token'})
@@ -166,7 +167,7 @@ class Scraper:
                 'X-Winter-Request-Handler': 'onSignin',
             }
             response = self.session.post(
-                LOGIN_URL, data=payload, headers=headers)
+                LOGIN_URL, data=payload, headers=headers, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
 
             try:
@@ -269,7 +270,7 @@ class Scraper:
         }
 
         response = self.session.post(
-            BOOKING_URL, data=payload, headers=headers)
+            BOOKING_URL, data=payload, headers=headers, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         json_response = response.json()
 
@@ -447,10 +448,9 @@ class Scraper:
                 'timestamp': timestamp_input.get('value'),
             }
 
-            # Fetch CSRF token here, only if we are actually booking
-            self.csrf_token = self._get_csrf_token()  # Refresh CSRF token
+            # CSRF token is already fresh from _get_classes_for_single_date()
             if not self.csrf_token:
-                raise Exception("Could not get a fresh CSRF token for booking.")
+                raise Exception("No CSRF token available for booking.")
 
             headers = {
                 **self.base_headers,
@@ -462,7 +462,7 @@ class Scraper:
                 f"Attempting {action_description} for class ID {
                     booking_payload['id']}...")
             response = self.session.post(
-                BOOKING_URL, data=booking_payload, headers=headers)
+                BOOKING_URL, data=booking_payload, headers=headers, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
 
             if "X_OCTOBER_REDIRECT" in response.text:
@@ -599,7 +599,7 @@ class Scraper:
             f"Attempting cancellation for class ID {
                 cancellation_payload['id']}...")
         response = self.session.post(
-            BOOKING_URL, data=cancellation_payload, headers=headers)
+            BOOKING_URL, data=cancellation_payload, headers=headers, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
 
         if "X_OCTOBER_REDIRECT" in response.text:
@@ -618,7 +618,7 @@ class Scraper:
         """Scrapes the members area to get a list of current bookings and waiting list entries."""
         logging.debug("Attempting to scrape members area for bookings...")
         response = self.session.get(
-            MEMBERS_URL, headers={'User-Agent': self.user_agent})
+            MEMBERS_URL, headers={'User-Agent': self.user_agent}, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
 
         # Check if we were redirected to the login page, indicating an expired
