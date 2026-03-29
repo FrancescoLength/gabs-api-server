@@ -8,6 +8,8 @@ from typing import List, Dict, Any, Optional, Tuple
 DATABASE_FILE = os.environ.get('GABS_DB_PATH', os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'auto_bookings.db'))
 
+logger = logging.getLogger(__name__)
+
 
 def get_db_connection(timeout: int = 30) -> sqlite3.Connection:
     """Establishes a database connection with a default timeout."""
