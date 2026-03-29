@@ -335,3 +335,45 @@ def test_lock_auto_booking_concurrency(memory_db):
     # Only one thread should have acquired the lock
     assert results.count(True) == 1
     assert results.count(False) == 4
+
+
+def test_push_subscription_cleanup(memory_db):
+    username = "cleanup_user"
+    
+    # Save 5 subscriptions with different endpoints and incrementing timestamps
+    # Note: save_push_subscription uses datetime.now().timestamp(), 
+    # so we might need a small delay or manual injection if it's too fast.
+    # However, since the primary key (id) is autoincrementing, 
+    # delete_push_subscription uses 'created_at' for ordering.
+    
+    # For testing, we'll call cleanup_old_push_subscriptions with manual data
+    # to ensure predictable ordering.
+    
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    for i in range(1, 6):
+        cursor.execute(
+            "INSERT INTO push_subscriptions (username, endpoint, p256dh, auth, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (username, f"endpoint_{i}", "dh", "auth", 1000 + i)
+        )
+    conn.commit()
+    conn.close()
+    
+    # Verify we have 5
+    subscriptions = database.get_push_subscriptions_for_user(username)
+    assert len(subscriptions) == 5
+    
+    # Trigger cleanup
+    deleted = database.cleanup_old_push_subscriptions(username)
+    assert deleted == 3
+    
+    # Verify only 2 remain
+    subscriptions = database.get_push_subscriptions_for_user(username)
+    assert len(subscriptions) == 2
+    
+    # Verify they are the most recent ones (created_at 1004 and 1005)
+    endpoints = [s['endpoint'] for s in subscriptions]
+    assert "endpoint_5" in endpoints
+    assert "endpoint_4" in endpoints
+    assert "endpoint_1" not in endpoints
