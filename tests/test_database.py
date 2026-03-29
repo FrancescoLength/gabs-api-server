@@ -365,7 +365,7 @@ def test_push_subscription_cleanup(memory_db):
     assert len(subscriptions) == 5
     
     # Trigger cleanup
-    deleted = database.cleanup_old_push_subscriptions(username)
+    deleted = database.cleanup_old_push_subscriptions(username, conn=memory_db)
     assert deleted == 3
     
     # Verify only 2 remain

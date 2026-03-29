@@ -383,10 +383,11 @@ def save_push_subscription(
         "VALUES (?, ?, ?, ?, ?)",
         (username, endpoint, p256dh, auth, created_at))
     conn.commit()
-    conn.close()
     
     # Auto-cleanup: keep only the 2 most recent registrations per user
-    cleanup_old_push_subscriptions(username)
+    cleanup_old_push_subscriptions(username, conn=conn)
+
+    conn.close()
 
 
 def get_push_subscriptions_for_user(username: str) -> List[Dict[str, Any]]:
@@ -420,12 +421,16 @@ def delete_push_subscription(endpoint: str) -> bool:
     return deleted_rows > 0
 
 
-def cleanup_old_push_subscriptions(username: str) -> int:
+def cleanup_old_push_subscriptions(username: str, conn: Optional[sqlite3.Connection] = None) -> int:
     """
-    Keepts only the 2 most recent push registrations for the given user.
+    Keep only the 2 most recent push registrations for the given user.
     Returns the number of deleted stale subscriptions.
     """
-    conn = get_db_connection()
+    should_close = False
+    if conn is None:
+        conn = get_db_connection()
+        should_close = True
+        
     cursor = conn.cursor()
     # Delete everything except the 2 most recent (by created_at DESC)
     cursor.execute("""
@@ -439,7 +444,10 @@ def cleanup_old_push_subscriptions(username: str) -> int:
     """, (username, username))
     conn.commit()
     deleted_count = cursor.rowcount
-    conn.close()
+    
+    if should_close:
+        conn.close()
+        
     if deleted_count > 0:
         logger.info(f"Cleaned up {deleted_count} stale push subscriptions for user: {username}")
     return deleted_count
