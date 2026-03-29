@@ -2,10 +2,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import sys
 
-try:
-    from .task_logger import TaskContextFilter, JSONFormatter, HumanReadableFormatter
-except ImportError:
-    from task_logger import TaskContextFilter, JSONFormatter, HumanReadableFormatter
+from gabs_api_server.task_logger import TaskContextFilter, JSONFormatter, HumanReadableFormatter
 
 LOG_FILE = 'gabs_api.log'
 

@@ -10,32 +10,18 @@ from typing import Dict
 
 SCHEDULER_TIMEZONE = ZoneInfo('Europe/London')
 
-try:
-    from .app import (
-        reset_failed_bookings,
-        refresh_sessions,
-        app,
-        debug_writer_queue,
-        get_scraper_instance,
-        handle_session_expiration)
-    from . import database
-    from .services.auto_booking_service import process_auto_bookings_job
-    from .services.notification_service import process_cancellation_reminders
-    from .task_logger import set_task_context, clear_task_context
-    from .logging_config import setup_logging
-except ImportError:
-    from app import (
-        reset_failed_bookings,
-        refresh_sessions,
-        app,
-        debug_writer_queue,
-        get_scraper_instance,
-        handle_session_expiration)
-    import database
-    from services.auto_booking_service import process_auto_bookings_job
-    from services.notification_service import process_cancellation_reminders
-    from task_logger import set_task_context, clear_task_context
-    from logging_config import setup_logging
+from gabs_api_server.app import (
+    reset_failed_bookings,
+    refresh_sessions,
+    app,
+    debug_writer_queue,
+    get_scraper_instance,
+    handle_session_expiration)
+from gabs_api_server import database
+from gabs_api_server.services.auto_booking_service import process_auto_bookings_job
+from gabs_api_server.services.notification_service import process_cancellation_reminders
+from gabs_api_server.task_logger import set_task_context, clear_task_context
+from gabs_api_server.logging_config import setup_logging
 
 # Configure logging
 setup_logging()

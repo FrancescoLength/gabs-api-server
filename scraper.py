@@ -1,8 +1,5 @@
 import requests
-try:
-    from . import config
-except ImportError:
-    import config
+from gabs_api_server import config
 from bs4 import BeautifulSoup
 import logging
 from datetime import date, timedelta, datetime

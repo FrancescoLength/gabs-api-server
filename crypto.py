@@ -1,8 +1,5 @@
 from cryptography.fernet import Fernet
-try:
-    from . import config
-except ImportError:
-    import config
+from gabs_api_server import config
 
 # Initialize Fernet with the key from config
 # This will raise an error if the key is not set, which is a good thing.

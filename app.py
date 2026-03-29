@@ -17,24 +17,14 @@ from typing import List, Dict, Any, Optional, Tuple, Callable
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager, verify_jwt_in_request
 from flasgger import Swagger
 
-try:
-    from .scraper import Scraper, SessionExpiredError
-    from . import config
-    from . import database
-    from . import crypto
-    from .services import auto_booking_service
-    from .services import notification_service
-    from .logging_config import setup_logging, LOG_FILE
-    from .task_logger import set_task_context, clear_task_context
-except ImportError:
-    from scraper import Scraper, SessionExpiredError
-    import config
-    import database
-    import crypto
-    from services import auto_booking_service
-    from services import notification_service
-    from logging_config import setup_logging, LOG_FILE
-    from task_logger import set_task_context, clear_task_context
+from gabs_api_server.scraper import Scraper, SessionExpiredError
+from gabs_api_server import config
+from gabs_api_server import database
+from gabs_api_server import crypto
+from gabs_api_server.services import auto_booking_service
+from gabs_api_server.services import notification_service
+from gabs_api_server.logging_config import setup_logging, LOG_FILE
+from gabs_api_server.task_logger import set_task_context, clear_task_context
 
 
 from apscheduler.schedulers.background import BackgroundScheduler
