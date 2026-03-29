@@ -4,12 +4,8 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from pywebpush import webpush, WebPushException
 
-try:
-    from .. import config
-    from .. import database
-except ImportError:
-    import config
-    import database
+from gabs_api_server import config
+from gabs_api_server import database
 
 logger = logging.getLogger(__name__)
 

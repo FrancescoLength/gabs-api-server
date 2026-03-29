@@ -115,7 +115,7 @@ class JSONFormatter(logging.Formatter):
         if record.exc_text:
             log_entry['exception'] = record.exc_text
 
-        return json.dumps(log_entry, ensure_ascii=False)
+        return json.dumps(log_entry, ensure_ascii=False, default=str)
 
 
 class HumanReadableFormatter(logging.Formatter):
@@ -138,7 +138,7 @@ class HumanReadableFormatter(logging.Formatter):
         if scenario:
             parts.append(f'[{scenario}]')
         if user:
-            parts.append(user)
+            parts.append(str(user))
 
         prefix = ' '.join(parts)
         if prefix:

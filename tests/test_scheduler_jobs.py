@@ -7,6 +7,7 @@ from gabs_api_server.services.notification_service import process_cancellation_r
 from gabs_api_server.services.auto_booking_service import process_auto_bookings_job
 from gabs_api_server import database
 from gabs_api_server.scraper import SessionExpiredError
+from gabs_api_server.task_logger import clear_task_context
 
 
 def test_process_auto_bookings_flow(memory_db, mocker):
@@ -58,6 +59,7 @@ def test_process_auto_bookings_flow(memory_db, mocker):
 
 def test_send_cancellation_reminders_flow(memory_db, mocker):
     # 1. Setup
+    clear_task_context()
     username = "test_user"
 
     # Mock datetime.now() to a fixed point in time
@@ -76,7 +78,7 @@ def test_send_cancellation_reminders_flow(memory_db, mocker):
                  'test@example.com')  # Mock config values
 
     class_date = mock_now.strftime("%Y-%m-%d")
-    class_time = (mock_now + timedelta(hours=3, minutes=30)).strftime("%H:%M")
+    class_time = (mock_now + timedelta(hours=3, minutes=29)).strftime("%H:%M")
 
     database.save_push_subscription(
         username, {'endpoint': 'a', 'keys': {'p256dh': 'a', 'auth': 'a'}})
@@ -98,6 +100,7 @@ def test_send_cancellation_reminders_flow(memory_db, mocker):
 
 def test_send_cancellation_reminders_outside_window(memory_db, mocker):
     # 1. Setup
+    clear_task_context()
     username = "test_user"
     mock_now = datetime(2025, 1, 1, 10, 0, 0)
 
@@ -127,6 +130,7 @@ def test_send_cancellation_reminders_outside_window(memory_db, mocker):
 
 def test_send_cancellation_reminders_no_subscription(memory_db, mocker):
     # 1. Setup
+    clear_task_context()
     username = "test_user"
     mock_now = datetime(2025, 1, 1, 10, 0, 0)
 
@@ -140,7 +144,7 @@ def test_send_cancellation_reminders_no_subscription(memory_db, mocker):
         'gabs_api_server.services.notification_service.webpush')  # Store the mock object
 
     class_date = mock_now.strftime("%Y-%m-%d")
-    class_time = (mock_now + timedelta(hours=3, minutes=30)).strftime("%H:%M")
+    class_time = (mock_now + timedelta(hours=3, minutes=29)).strftime("%H:%M")
 
     # NO push subscription saved
     database.add_live_booking(username, "Test Class", class_date, class_time)
@@ -160,6 +164,7 @@ def test_send_cancellation_reminders_no_subscription(memory_db, mocker):
 
 def test_send_cancellation_reminders_webpush_error(memory_db, mocker):
     # 1. Setup
+    clear_task_context()
     username = "test_user"
     mock_now = datetime(2025, 1, 1, 10, 0, 0)
 
@@ -174,7 +179,7 @@ def test_send_cancellation_reminders_webpush_error(memory_db, mocker):
                  'test@example.com')
 
     class_date = mock_now.strftime("%Y-%m-%d")
-    class_time = (mock_now + timedelta(hours=3, minutes=30)).strftime("%H:%M")
+    class_time = (mock_now + timedelta(hours=3, minutes=29)).strftime("%H:%M")
 
     database.save_push_subscription(
         username, {'endpoint': 'a', 'keys': {'p256dh': 'a', 'auth': 'a'}})
@@ -195,6 +200,7 @@ def test_send_cancellation_reminders_webpush_error(memory_db, mocker):
 
 def test_send_cancellation_reminders_webpush_gone_error(memory_db, mocker):
     # 1. Setup
+    clear_task_context()
     username = "test_user"
     mock_now = datetime(2025, 1, 1, 10, 0, 0)
 
@@ -209,7 +215,7 @@ def test_send_cancellation_reminders_webpush_gone_error(memory_db, mocker):
                  'test@example.com')
 
     class_date = mock_now.strftime("%Y-%m-%d")
-    class_time = (mock_now + timedelta(hours=3, minutes=30)).strftime("%H:%M")
+    class_time = (mock_now + timedelta(hours=3, minutes=29)).strftime("%H:%M")
 
     sub_endpoint = 'http://example.com/endpoint'
     database.save_push_subscription(

@@ -14,16 +14,10 @@ import queue
 # import config
 # from scraper import SessionExpiredError
 
-try:
-    from .. import database
-    from .. import config
-    from ..scraper import Scraper, SessionExpiredError
-    from ..task_logger import set_task_context, clear_task_context
-except ImportError:
-    import database
-    import config
-    from scraper import Scraper, SessionExpiredError
-    from task_logger import set_task_context, clear_task_context
+from gabs_api_server import database
+from gabs_api_server import config
+from gabs_api_server.scraper import Scraper, SessionExpiredError
+from gabs_api_server.task_logger import set_task_context, clear_task_context
 
 logger = logging.getLogger(__name__)
 
