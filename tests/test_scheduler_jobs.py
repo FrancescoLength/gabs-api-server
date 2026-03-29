@@ -72,10 +72,9 @@ def test_send_cancellation_reminders_flow(memory_db, mocker):
 
     mocker.patch('gabs_api_server.services.notification_service.datetime',
                  FakeDateTime)  # Patch service's datetime
-    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_PRIVATE_KEY',
-                 'test_key')  # Mock config values
-    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_ADMIN_EMAIL',
-                 'test@example.com')  # Mock config values
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_PRIVATE_KEY', 'test_key')
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_PUBLIC_KEY', 'test_public_key')
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_ADMIN_EMAIL', 'test@example.com')
 
     class_date = mock_now.strftime("%Y-%m-%d")
     class_time = (mock_now + timedelta(hours=3, minutes=29)).strftime("%H:%M")
@@ -175,8 +174,8 @@ def test_send_cancellation_reminders_webpush_error(memory_db, mocker):
 
     mocker.patch('gabs_api_server.services.notification_service.datetime', FakeDateTime)
     mocker.patch('gabs_api_server.services.notification_service.config.VAPID_PRIVATE_KEY', 'test_key')
-    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_ADMIN_EMAIL',
-                 'test@example.com')
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_PUBLIC_KEY', 'test_public_key')
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_ADMIN_EMAIL', 'test@example.com')
 
     class_date = mock_now.strftime("%Y-%m-%d")
     class_time = (mock_now + timedelta(hours=3, minutes=29)).strftime("%H:%M")
@@ -211,8 +210,8 @@ def test_send_cancellation_reminders_webpush_gone_error(memory_db, mocker):
 
     mocker.patch('gabs_api_server.services.notification_service.datetime', FakeDateTime)
     mocker.patch('gabs_api_server.services.notification_service.config.VAPID_PRIVATE_KEY', 'test_key')
-    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_ADMIN_EMAIL',
-                 'test@example.com')
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_PUBLIC_KEY', 'test_public_key')
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_ADMIN_EMAIL', 'test@example.com')
 
     class_date = mock_now.strftime("%Y-%m-%d")
     class_time = (mock_now + timedelta(hours=3, minutes=29)).strftime("%H:%M")
