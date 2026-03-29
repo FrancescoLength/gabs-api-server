@@ -42,4 +42,5 @@ jobs:
         JWT_SECRET_KEY: "test_jwt_secret_key"
         PYTHONPATH: .
       run: |
+        ls -R
         pytest --cov=gabs_api_server gabs_api_server/tests/
