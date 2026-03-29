@@ -731,6 +731,7 @@ def health_check() -> Tuple[Any, int]:
 
 @app.route('/api/admin/logs', methods=['GET'])
 @admin_required
+@limiter.limit("200 per minute")
 def get_logs() -> Tuple[Any, int]:
     legacy_pattern: re.Pattern[str] = re.compile(r'^(\S+ \S+) - (\w+) - (.*)')
     try:
