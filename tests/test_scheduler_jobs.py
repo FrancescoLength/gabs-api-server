@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
 from gabs_api_server.app import (
-    send_cancellation_reminders, reset_failed_bookings, refresh_sessions,
+    reset_failed_bookings, refresh_sessions,
     app, debug_writer_queue, handle_session_expiration
 )
+from gabs_api_server.services.notification_service import process_cancellation_reminders
 from gabs_api_server.services.auto_booking_service import process_auto_bookings_job
 from gabs_api_server import database
 from gabs_api_server.scraper import SessionExpiredError
@@ -67,11 +68,11 @@ def test_send_cancellation_reminders_flow(memory_db, mocker):
         def now(cls):
             return mock_now
 
-    mocker.patch('gabs_api_server.app.datetime',
-                 FakeDateTime)  # Patch app's datetime
-    mocker.patch('gabs_api_server.app.config.VAPID_PRIVATE_KEY',
+    mocker.patch('gabs_api_server.services.notification_service.datetime',
+                 FakeDateTime)  # Patch service's datetime
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_PRIVATE_KEY',
                  'test_key')  # Mock config values
-    mocker.patch('gabs_api_server.app.config.VAPID_ADMIN_EMAIL',
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_ADMIN_EMAIL',
                  'test@example.com')  # Mock config values
 
     class_date = mock_now.strftime("%Y-%m-%d")
@@ -83,10 +84,10 @@ def test_send_cancellation_reminders_flow(memory_db, mocker):
 
     # Mock webpush
     mock_webpush = mocker.patch(
-        'gabs_api_server.app.webpush')  # Patch app's webpush
+        'gabs_api_server.services.notification_service.webpush')  # Patch service's webpush
 
     # 2. Execute
-    send_cancellation_reminders()
+    process_cancellation_reminders()
 
     # 3. Assert
     mock_webpush.assert_called_once()
@@ -105,9 +106,9 @@ def test_send_cancellation_reminders_outside_window(memory_db, mocker):
         def now(cls):
             return mock_now
 
-    mocker.patch('gabs_api_server.app.datetime', FakeDateTime)
+    mocker.patch('gabs_api_server.services.notification_service.datetime', FakeDateTime)
     mock_webpush = mocker.patch(
-        'gabs_api_server.app.webpush')  # Store the mock object
+        'gabs_api_server.services.notification_service.webpush')  # Store the mock object
 
     class_date = mock_now.strftime("%Y-%m-%d")
     # Class time is 5 hours away, so reminder should NOT be sent
@@ -118,7 +119,7 @@ def test_send_cancellation_reminders_outside_window(memory_db, mocker):
     database.add_live_booking(username, "Test Class", class_date, class_time)
 
     # 2. Execute
-    send_cancellation_reminders()
+    process_cancellation_reminders()
 
     # 3. Assert
     mock_webpush.assert_not_called()  # Use the mock object directly
@@ -134,9 +135,9 @@ def test_send_cancellation_reminders_no_subscription(memory_db, mocker):
         def now(cls):
             return mock_now
 
-    mocker.patch('gabs_api_server.app.datetime', FakeDateTime)
+    mocker.patch('gabs_api_server.services.notification_service.datetime', FakeDateTime)
     mock_webpush = mocker.patch(
-        'gabs_api_server.app.webpush')  # Store the mock object
+        'gabs_api_server.services.notification_service.webpush')  # Store the mock object
 
     class_date = mock_now.strftime("%Y-%m-%d")
     class_time = (mock_now + timedelta(hours=3, minutes=30)).strftime("%H:%M")
@@ -145,7 +146,7 @@ def test_send_cancellation_reminders_no_subscription(memory_db, mocker):
     database.add_live_booking(username, "Test Class", class_date, class_time)
 
     # 2. Execute
-    send_cancellation_reminders()
+    process_cancellation_reminders()
 
     # 3. Assert
     mock_webpush.assert_not_called()  # Use the mock object directly
@@ -167,9 +168,9 @@ def test_send_cancellation_reminders_webpush_error(memory_db, mocker):
         def now(cls):
             return mock_now
 
-    mocker.patch('gabs_api_server.app.datetime', FakeDateTime)
-    mocker.patch('gabs_api_server.app.config.VAPID_PRIVATE_KEY', 'test_key')
-    mocker.patch('gabs_api_server.app.config.VAPID_ADMIN_EMAIL',
+    mocker.patch('gabs_api_server.services.notification_service.datetime', FakeDateTime)
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_PRIVATE_KEY', 'test_key')
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_ADMIN_EMAIL',
                  'test@example.com')
 
     class_date = mock_now.strftime("%Y-%m-%d")
@@ -180,16 +181,16 @@ def test_send_cancellation_reminders_webpush_error(memory_db, mocker):
     database.add_live_booking(username, "Test Class", class_date, class_time)
 
     # Mock webpush to raise exception
-    mocker.patch('gabs_api_server.app.webpush',
+    mocker.patch('gabs_api_server.services.notification_service.webpush',
                  side_effect=Exception("Webpush failed"))
-    mock_logger_error = mocker.patch('gabs_api_server.app.logging.error')
+    mock_logger_error = mocker.patch('gabs_api_server.services.notification_service.logger.error')
 
     # 2. Execute
-    send_cancellation_reminders()
+    process_cancellation_reminders()
 
     # 3. Assert
     mock_logger_error.assert_called_once()
-    assert "Error sending cancellation reminder" in mock_logger_error.call_args[0][0]
+    assert "Error sending push notification" in mock_logger_error.call_args[0][0]
 
 
 def test_send_cancellation_reminders_webpush_gone_error(memory_db, mocker):
@@ -202,9 +203,9 @@ def test_send_cancellation_reminders_webpush_gone_error(memory_db, mocker):
         def now(cls):
             return mock_now
 
-    mocker.patch('gabs_api_server.app.datetime', FakeDateTime)
-    mocker.patch('gabs_api_server.app.config.VAPID_PRIVATE_KEY', 'test_key')
-    mocker.patch('gabs_api_server.app.config.VAPID_ADMIN_EMAIL',
+    mocker.patch('gabs_api_server.services.notification_service.datetime', FakeDateTime)
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_PRIVATE_KEY', 'test_key')
+    mocker.patch('gabs_api_server.services.notification_service.config.VAPID_ADMIN_EMAIL',
                  'test@example.com')
 
     class_date = mock_now.strftime("%Y-%m-%d")
@@ -218,18 +219,26 @@ def test_send_cancellation_reminders_webpush_gone_error(memory_db, mocker):
     database.add_live_booking(username, "Test Class", class_date, class_time)
 
     # Mock webpush to raise 410 GONE exception
-    mocker.patch('gabs_api_server.app.webpush',
-                 side_effect=Exception("410 Gone"))
-    mocker.patch('gabs_api_server.app.logging.error')
+    class MockResponse:
+        status_code = 410
+
+    from pywebpush import WebPushException
+    mock_exception = WebPushException("410 Gone", response=MockResponse())
+
+    mocker.patch('gabs_api_server.services.notification_service.webpush',
+                 side_effect=mock_exception)
+    mock_logger_info = mocker.patch('gabs_api_server.services.notification_service.logger.info')
 
     # 2. Execute
-    send_cancellation_reminders()
+    process_cancellation_reminders()
 
     # 3. Assert
-    # mock_logger_error.assert_called_once()
     # Verify subscription was deleted
     subs = database.get_push_subscriptions_for_user(username)
     assert len(subs) == 0
+    # Also verify it was logged
+    log_found = any("Subscription expired (410 Gone)" in call[0][0] for call in mock_logger_info.call_args_list)
+    assert log_found
 
 
 def test_reset_failed_bookings_flow(memory_db):
@@ -237,9 +246,9 @@ def test_reset_failed_bookings_flow(memory_db):
     # Booking 1: Failed and old (should be reset)
     booking_id_failed = database.add_auto_booking(
         "test_user", "Test Class", "10:00", "Monday", "Test Instructor")
-    one_day_ago = int((datetime.now() - timedelta(hours=25)).timestamp())
+    two_days_ago = int((datetime.now() - timedelta(hours=48)).timestamp())
     database.update_auto_booking_status(
-        booking_id_failed, "failed", last_attempt_at=one_day_ago)
+        booking_id_failed, "failed", last_attempt_at=two_days_ago)
 
     # Booking 2: In Progress (should be reset immediately)
     booking_id_stuck = database.add_auto_booking(

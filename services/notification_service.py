@@ -4,8 +4,12 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from pywebpush import webpush, WebPushException
 
-import config
-import database
+try:
+    from .. import config
+    from .. import database
+except ImportError:
+    import config
+    import database
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +100,7 @@ def process_cancellation_reminders() -> None:
                 database.update_live_booking_reminder_status(booking_id, reminder_sent=1)
                 
                 title = "GABS Reminder ⏰"
-                body = f"La tua classe '{class_name}' inizia alle {class_time}. Ricordati di cancellarti se non puoi partecipare per evitare uno strike!"
+                body = f"Your class '{class_name}' starts at {class_time}. Remember to cancel if you cannot attend to avoid a strike!"
                 url = "/live-booking"
                 
                 logger.info(f"Sending cancellation reminder for booking {booking_id} to user {username}")

@@ -18,4 +18,4 @@ gabs_api.log
 .coverage
 auto_bookings.db.bak
 # Ignore test script
-tests/booking_test.py
+tests/booking_e2e_script.py
