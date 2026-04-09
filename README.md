@@ -1,7 +1,7 @@
 # GABS API Server: Automated Gym Booking & Management
 <img width="648" height="485" alt="Screenshot from 2026-02-04 14-10-26" src="https://github.com/user-attachments/assets/d010fb9b-28d2-4307-afe7-f453b87c75a2" />
 
-This Flask-based API server empowers users to seamlessly interact with a famous Bristol gym's website, automating the process of viewing, booking, and managing gym class reservations. Designed for efficiency and convenience, it acts as a robust backend for custom client applications (such as a React frontend),ideal for deployment on low-power devices like a Raspberry Pi.
+This Flask-based API server empowers users to seamlessly interact with a famous Bristol gym's website, automating the process of viewing, booking, and managing gym class reservations. Designed for efficiency and convenience, it acts as a robust backend for custom client applications (such as a React frontend), ideal for deployment on low-power devices like a Raspberry Pi or an Android phone running Termux.
 
 ## Key Features
 
@@ -219,11 +219,86 @@ A GitHub Actions workflow (`.github/workflows/test.yml`) ensures code quality on
 -   **Testing**: Executes the full `pytest` suite with coverage reporting.
 
 ### Deployment (Raspberry Pi)
-Unlike the frontend, the backend does not deployed automatically via CI (due to the on-premise nature of the Raspberry Pi).
+Unlike the frontend, the backend does not deploy automatically via CI (due to the on-premise nature of the Raspberry Pi).
 **Recommended Deployment Workflow:**
 1.  **CI Validation**: Ensure the GitHub Actions workflow passes.
 2.  **Pull Updates**: On the Raspberry Pi, run `git pull`.
 3.  **Restart Services**: `docker-compose up -d --build` or `sudo systemctl restart gabs-api`.
+
+### Option C: Termux Deployment (Android)
+
+The server can run on a non-rooted Android device using [Termux](https://termux.dev). This was adopted after the original Raspberry Pi's SD card failed, porting the entire production stack to an LG G5 (ARMv7l, Android 7.0).
+
+#### Termux-Specific Adaptations
+
+-   **Timezone:** Termux lacks `tzdata`, so `ZoneInfo` is unavailable. Both `app.py` and `scheduler_runner.py` pass `timezone='UTC'` as a plain string to APScheduler instead of using `ZoneInfo` or `pytz` objects.
+-   **Cryptography:** The `cryptography` Python package requires Rust compilation, which is extremely slow on ARM32. The workaround is to install the pre-built Termux package (`pkg install python-cryptography`) and create the virtualenv with `--system-site-packages`.
+-   **ngrok on Termux:** Go binaries (like ngrok) use a pure Go DNS resolver that reads `/etc/resolv.conf`. On Termux, `/etc` is not writable without root, and the file doesn't exist, causing Go to fall back to `[::1]:53` which fails on Android. The solution is to:
+    1.  Create `$PREFIX/etc/resolv.conf` with public nameservers (`8.8.8.8`, `1.1.1.1`).
+    2.  Run ngrok via `proot` to bind the Termux resolv.conf and CA certificates to the standard Linux paths:
+        ```bash
+        proot -b $PREFIX/etc/resolv.conf:/etc/resolv.conf \
+              -b $PREFIX/etc/tls/cert.pem:/etc/ssl/certs/ca-certificates.crt \
+              ~/ngrok start backend
+        ```
+
+#### Termux Setup
+
+1.  **Install prerequisites:**
+    ```bash
+    pkg install python python-cryptography openssh proot tmux
+    ```
+
+2.  **Create virtualenv and install dependencies:**
+    ```bash
+    python -m venv --system-site-packages venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+
+3.  **Configure ngrok:**
+    ```yaml
+    # ~/.config/ngrok/ngrok.yml
+    version: "3"
+    agent:
+      authtoken: <your-token>
+    tunnels:
+      backend:
+        addr: 5000
+        proto: http
+        domain: <your-domain>.ngrok-free.dev
+    ```
+
+4.  **Start all services** (or use the boot script below):
+    ```bash
+    # Terminal 1: API
+    source venv/bin/activate && python app.py
+
+    # Terminal 2: Scheduler
+    source venv/bin/activate && python scheduler_runner.py
+
+    # Terminal 3: ngrok tunnel
+    proot -b $PREFIX/etc/resolv.conf:/etc/resolv.conf \
+          -b $PREFIX/etc/tls/cert.pem:/etc/ssl/certs/ca-certificates.crt \
+          ~/ngrok start backend
+    ```
+
+#### Auto-Start on Boot (Termux:Boot)
+
+Install the [Termux:Boot](https://f-droid.org/packages/com.termux.boot/) app and create `~/.termux/boot/00_start_gabs`:
+
+```bash
+#!/data/data/com.termux/files/usr/bin/sh
+termux-wake-lock
+sshd
+sleep 3
+bash ~/start_gabs_nohup.sh
+exit 0
+```
+
+The `start_gabs_nohup.sh` script handles DNS setup, process cleanup, and launches the API, scheduler, and ngrok tunnel in background.
+
+> **Tip:** Disable battery optimisation for Termux in Android settings and acquire a wakelock via Termux's notification panel to prevent the OS from killing background processes.
 
 ## API Endpoints Documentation
 

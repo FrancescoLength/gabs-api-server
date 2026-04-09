@@ -13,7 +13,6 @@ from functools import wraps
 import queue
 import threading
 from typing import List, Dict, Any, Optional, Tuple, Callable
-import pytz
 
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager, verify_jwt_in_request
 from flasgger import Swagger
