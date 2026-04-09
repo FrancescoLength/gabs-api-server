@@ -13,6 +13,7 @@ from functools import wraps
 import queue
 import threading
 from typing import List, Dict, Any, Optional, Tuple, Callable
+import pytz
 
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager, verify_jwt_in_request
 from flasgger import Swagger
@@ -150,7 +151,8 @@ def handle_session_expiration(username: str) -> None:
 jobstores: Dict[str, SQLAlchemyJobStore] = {
     'default': SQLAlchemyJobStore(url=f'sqlite:///{database.DATABASE_FILE}')
 }
-scheduler = BackgroundScheduler(jobstores=jobstores)
+# Use 'UTC' string to avoid tzlocal issues on Termux/Android
+scheduler = BackgroundScheduler(jobstores=jobstores, timezone='UTC')
 
 # Wrapper function for the moved auto-booking processing logic
 

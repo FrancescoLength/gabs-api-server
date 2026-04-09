@@ -2,13 +2,13 @@ import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
-from zoneinfo import ZoneInfo
 import time
 import signal
 import sys
 from typing import Dict
 
-SCHEDULER_TIMEZONE = ZoneInfo('Europe/London')
+# Use 'UTC' string for Termux/Android compatibility
+SCHEDULER_TIMEZONE = 'UTC'
 
 from gabs_api_server.app import (
     reset_failed_bookings,
