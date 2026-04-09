@@ -19,3 +19,5 @@ gabs_api.log
 auto_bookings.db.bak
 # Ignore test script
 tests/booking_e2e_script.py
+
+LLM_GUIDE.md
