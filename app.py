@@ -626,9 +626,9 @@ def schedule_auto_book() -> Tuple[Any, int]:
     day_of_week: Optional[str] = data.get('day_of_week')
     instructor: Optional[str] = data.get('instructor')
 
-    if not all([class_name, target_time_str, day_of_week, instructor]):
+    if not all([class_name, target_time_str, day_of_week]):
         return jsonify(
-            {"error": "class_name, time, day_of_week, and instructor are required."}), 400
+            {"error": "class_name, time, and day_of_week are required."}), 400
 
     try:
         set_task_context('schedule_auto_booking', user=current_user,
