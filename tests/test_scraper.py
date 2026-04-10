@@ -647,3 +647,66 @@ def test_no_extra_csrf_fetch_during_booking(scraper_mock, mocker):
     # _get_csrf_token should never be called — CSRF token is reused from
     # _get_classes_for_single_date which sets it internally
     mock_csrf.assert_not_called()
+def test_no_extra_csrf_fetch_during_cancellation(scraper_mock, mocker):
+    """Verify _get_csrf_token is NOT called inside _parse_and_execute_cancellation when token exists."""
+    html = """
+    <div class="class grid">
+        <h2 class="title">Cancel Me</h2>
+        <span itemprop="startDate">10:00</span>
+        <form data-request="onBook">
+            <input name="id" value="999">
+            <input name="timestamp" value="888">
+            <button class="cancel">Cancel</button>
+        </form>
+    </div>
+    """
+    mocker.patch.object(
+        scraper_mock,
+        '_get_classes_for_single_date',
+        return_value={"@events": html})
+    mock_csrf = mocker.patch.object(
+        scraper_mock, '_get_csrf_token', return_value="fresh")
+    
+    # Pre-set the token to simulate it coming from session data
+    scraper_mock.csrf_token = "existing_token"
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {'status': 'success'}
+    mock_response.text = "success"
+    scraper_mock.session.post.return_value = mock_response
+
+    result = scraper_mock.find_and_cancel_booking(
+        "Cancel Me", "2025-01-01", "10:00")
+
+    assert result['status'] == 'success'
+    # _get_csrf_token should NOT be called because we already have a token
+    mock_csrf.assert_not_called()
+
+
+def test_get_classes_retry_on_403(scraper_mock, mocker):
+    """Verify that _get_classes_for_single_date retries after refreshing CSRF on 403."""
+    mock_csrf = mocker.patch.object(
+        scraper_mock, '_get_csrf_token', return_value="fresh_token")
+    
+    # First call returns 403, second call returns success
+    mock_response_403 = MagicMock()
+    mock_response_403.status_code = 403
+    mock_response_403.raise_for_status.side_effect = requests.exceptions.HTTPError(response=mock_response_403)
+    
+    mock_response_ok = MagicMock()
+    mock_response_ok.status_code = 200
+    mock_response_ok.json.return_value = {"@events": "some html"}
+    
+    scraper_mock.session.post.side_effect = [mock_response_403, mock_response_ok]
+    
+    # Pre-set token
+    scraper_mock.csrf_token = "stale_token"
+    
+    result = scraper_mock._get_classes_for_single_date("2025-01-01")
+    
+    assert result["@events"] == "some html"
+    assert scraper_mock.csrf_token == "fresh_token"
+    # CSRF refresh should have been called once
+    mock_csrf.assert_called_once()
+    # POST should have been called twice
+    assert scraper_mock.session.post.call_count == 2

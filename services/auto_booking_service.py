@@ -34,7 +34,7 @@ SendPushFunc = Callable[[str, str, str, str, str], None]
 # threads are only useful for overlapping I/O waits (HTTP requests).
 # 3 threads lets 3 users' bookings proceed concurrently without excessive
 # context-switching overhead on the constrained hardware.
-MAX_BOOKING_WORKERS = 3
+MAX_BOOKING_WORKERS = 5
 
 
 def _process_single_booking(

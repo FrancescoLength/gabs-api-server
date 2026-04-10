@@ -73,7 +73,7 @@ def run_scheduler():
     # This allows multiple booking jobs to run in parallel,
     # preventing one user's attempt from blocking another's.
     executors: Dict[str, ThreadPoolExecutor] = {
-        'default': ThreadPoolExecutor(2)
+        'default': ThreadPoolExecutor(5)
     }
 
     scheduler = BackgroundScheduler(

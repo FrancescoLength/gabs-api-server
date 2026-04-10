@@ -522,4 +522,4 @@ def test_parallel_error_isolation(memory_db, mocker):
 
 def test_max_booking_workers_constant():
     """Verify MAX_BOOKING_WORKERS is set to a sensible value for Pi Zero W."""
-    assert MAX_BOOKING_WORKERS == 3
+    assert MAX_BOOKING_WORKERS == 5

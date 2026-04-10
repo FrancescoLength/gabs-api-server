@@ -244,19 +244,19 @@ class Scraper:
         return self._parse_and_execute_booking(
             classes_html, class_name, target_time, instructor, target_date_str)
 
-    @handle_session_expiry
     def _get_classes_for_single_date(
-            self, target_date_str: str) -> Dict[str, Any]:
+            self, target_date_str: str, retry_on_csrf: bool = True) -> Dict[str, Any]:
         """Helper method to fetch class HTML for a single date."""
-        # time.sleep(random.uniform(1, 2))  # Removed for performance optimization
         if self.disabled_until and datetime.now() < self.disabled_until:
             raise Exception(
                 f"Scraper for {self.username} is temporarily disabled.")
 
-        self.csrf_token = self._get_csrf_token()
         if not self.csrf_token:
-            raise SessionExpiredError(
-                "Failed to get a fresh CSRF token before first attempt.")
+            logging.info(f"CSRF token missing for {self.username}, fetching...")
+            self.csrf_token = self._get_csrf_token()
+            if not self.csrf_token:
+                raise SessionExpiredError(
+                    "Failed to get a fresh CSRF token.")
 
         payload = {'date': target_date_str}
         headers = {
@@ -266,16 +266,28 @@ class Scraper:
             'x-csrf-token': self.csrf_token,
         }
 
-        response = self.session.post(
-            BOOKING_URL, data=payload, headers=headers, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        json_response = response.json()
+        try:
+            response = self.session.post(
+                BOOKING_URL, data=payload, headers=headers, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            
+            # Check for redirect or session expiry in response
+            if "X_OCTOBER_REDIRECT" in response.text or LOGIN_URL in response.url:
+                if retry_on_csrf:
+                    logging.warning(f"Session/CSRF might be stale for {self.username}. Refreshing and retrying...")
+                    self.csrf_token = self._get_csrf_token()
+                    return self._get_classes_for_single_date(target_date_str, retry_on_csrf=False)
+                raise SessionExpiredError("Session expired or CSRF token stale.")
 
-        if json_response.get("X_OCTOBER_REDIRECT"):
-            raise SessionExpiredError(
-                "Redirect received, indicating session has expired.")
-
-        return json_response
+            return response.json()
+        except (requests.exceptions.HTTPError, json.JSONDecodeError) as e:
+            # If we get a 403 Forbidden, it's often a CSRF issue
+            if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code == 403:
+                if retry_on_csrf:
+                    logging.warning(f"CSRF forbidden (403) for {self.username}. Refreshing token and retrying...")
+                    self.csrf_token = self._get_csrf_token()
+                    return self._get_classes_for_single_date(target_date_str, retry_on_csrf=False)
+            raise
 
     def _parse_classes_from_html(
             self, classes_html: str, target_date: date) -> List[Dict[str, Any]]:
@@ -508,10 +520,12 @@ class Scraper:
             instructor_name: str, target_date_str: str, is_retry: bool = False
     ) -> Dict[str, Any]:
         """Helper method that finds a class and triggers the cancellation, with auto re-login."""
-        self.csrf_token = self._get_csrf_token()  # Refresh CSRF token
+        if not self.csrf_token:
+            self.csrf_token = self._get_csrf_token()
+
         if not self.csrf_token:
             raise Exception(
-                "Could not get a fresh CSRF token for cancellation.")
+                "Could not get a CSRF token for cancellation.")
 
         soup = BeautifulSoup(classes_html, 'html.parser')
         gym_classes = soup.find_all('div', {'class': 'class grid'})

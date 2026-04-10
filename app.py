@@ -213,6 +213,9 @@ def refresh_sessions() -> None:
                     if scraper:
                         bookings: List[Dict[str, Any]] = scraper.get_my_bookings()
                         database.touch_session(username)
+                        # Save the potentially updated session (cookies/token) back to DB
+                        encrypted_pass = crypto.encrypt(scraper.password)
+                        database.save_session(username, encrypted_pass, scraper.to_dict())
                         sync_live_bookings(username, bookings)
                         logging.debug(
                             f"Session for {username} is valid and bookings synced.")
@@ -223,6 +226,12 @@ def refresh_sessions() -> None:
                 except SessionExpiredError:
                     logging.info(
                         f"Session for {username} was expired and has been refreshed by the scraper.")
+                    # Scraper automatically re-logs in and updates its own session
+                    # We should save this new state
+                    scraper = get_scraper_instance(username)
+                    if scraper:
+                         encrypted_pass = crypto.encrypt(scraper.password)
+                         database.save_session(username, encrypted_pass, scraper.to_dict())
                     break
                 except (requests.exceptions.ConnectionError,
                         requests.exceptions.Timeout) as e:
