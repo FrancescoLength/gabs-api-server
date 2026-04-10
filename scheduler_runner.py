@@ -20,6 +20,7 @@ from gabs_api_server.app import (
 from gabs_api_server import database
 from gabs_api_server.services.auto_booking_service import process_auto_bookings_job
 from gabs_api_server.services.notification_service import process_cancellation_reminders
+from gabs_api_server.services.timetable_sync import update_static_timetable_job, sync_auto_bookings_job
 from gabs_api_server.task_logger import set_task_context, clear_task_context
 from gabs_api_server.logging_config import setup_logging
 
@@ -60,6 +61,17 @@ def run_process_cancellation_reminders():
             process_cancellation_reminders()
         finally:
             clear_task_context()
+
+
+def run_update_static_timetable():
+    with app.app_context():
+        logger.info("Running update_static_timetable job.")
+        update_static_timetable_job()
+
+def run_sync_auto_bookings():
+    with app.app_context():
+        logger.info("Running sync_auto_bookings job.")
+        sync_auto_bookings_job()
 
 
 def run_scheduler():
@@ -112,6 +124,28 @@ def run_scheduler():
         minute=0,
         second=1,
         id='reset_failed_bookings_job',
+        replace_existing=True,
+        misfire_grace_time=300)
+
+    # Update timetable job, runs once daily at 01:00 AM
+    scheduler.add_job(
+        run_update_static_timetable,
+        'cron',
+        hour=1,
+        minute=0,
+        second=1,
+        id='update_static_timetable_job',
+        replace_existing=True,
+        misfire_grace_time=300)
+
+    # Sync auto-bookings with the fresh timetable, runs once daily at 01:30 AM
+    scheduler.add_job(
+        run_sync_auto_bookings,
+        'cron',
+        hour=1,
+        minute=30,
+        second=1,
+        id='sync_auto_bookings_job',
         replace_existing=True,
         misfire_grace_time=300)
 
