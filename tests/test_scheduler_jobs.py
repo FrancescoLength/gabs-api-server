@@ -291,6 +291,8 @@ def test_refresh_sessions_success(memory_db, mocker):
 
     # Mock get_scraper_instance
     mock_scraper = mocker.Mock()
+    mock_scraper.password = "test_password"
+    mock_scraper.to_dict.return_value = {"cookies": {}, "csrf_token": "token"}
     mock_scraper.get_my_bookings.return_value = [
         {"name": "Class", "date": "2025-01-01", "time": "10:00"}]
     mocker.patch('gabs_api_server.app.get_scraper_instance',
@@ -335,6 +337,8 @@ def test_refresh_sessions_session_expired(memory_db, mocker):
     mocker.patch('gabs_api_server.database.get_all_users',
                  return_value=["test_user"])
     mock_scraper = mocker.Mock()
+    mock_scraper.password = "test_password"
+    mock_scraper.to_dict.return_value = {"cookies": {}, "csrf_token": "token"}
     mock_scraper.get_my_bookings.side_effect = SessionExpiredError("Expired")
     mocker.patch('gabs_api_server.app.get_scraper_instance',
                  return_value=mock_scraper)
@@ -355,6 +359,7 @@ def test_refresh_sessions_unexpected_error(memory_db, mocker):
     mocker.patch('gabs_api_server.database.get_all_users',
                  return_value=["test_user"])
     mock_scraper = mocker.Mock()
+    mock_scraper.password = "test_password"
     mock_scraper.get_my_bookings.side_effect = Exception("Unexpected")
     mocker.patch('gabs_api_server.app.get_scraper_instance',
                  return_value=mock_scraper)
