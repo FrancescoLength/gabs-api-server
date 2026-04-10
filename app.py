@@ -622,17 +622,19 @@ def schedule_auto_book() -> Tuple[Any, int]:
             {"error": "class_name, time, day_of_week, and instructor are required."}), 400
 
     try:
+        set_task_context('schedule_auto_booking', user=current_user,
+                         class_name=class_name, time=target_time_str, date=day_of_week)
         booking_id: int = database.add_auto_booking(
             current_user, class_name, target_time_str, day_of_week, instructor  # type: ignore
         )
         logging.info(
-            f"Recurring auto-booking scheduled for user {current_user}: Class {class_name} "
-            f"on {day_of_week} at {target_time_str}. Booking ID: {booking_id}")
+            f"Recurring auto-booking scheduled successfully. Booking ID: {booking_id}")
+        clear_task_context()
         return jsonify(
             {"message": "Recurring auto-booking scheduled successfully!", "booking_id": booking_id}), 201
     except Exception as e:
-        logging.error(
-            f"Error scheduling auto-booking for user {current_user}: {e}")
+        logging.error(f"Error scheduling auto-booking: {e}")
+        clear_task_context()
         return jsonify(
             {"error": "An internal server error occurred. Contact Administrator."}), 500
 
@@ -678,8 +680,10 @@ def cancel_auto_book() -> Tuple[Any, int]:
 
     try:
         if database.cancel_auto_booking(booking_id, current_user):
+            set_task_context("cancel_auto_booking", user=current_user)
             logging.info(
-                f"Auto-booking ID {booking_id} cancelled by user {current_user}.")
+                f"Auto-booking ID {booking_id} cancelled successfully.")
+            clear_task_context()
             return jsonify(
                 {"message": "Recurring auto-booking cancelled successfully!"}), 200
         else:
