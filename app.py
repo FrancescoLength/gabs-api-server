@@ -793,6 +793,7 @@ def get_logs() -> Tuple[Any, int]:
 
 
 @app.route('/api/admin/auto_bookings', methods=['GET'])
+@limiter.limit("200 per hour")
 @admin_required
 def get_all_auto_bookings() -> Tuple[Any, int]:
     bookings_raw: List[Dict[str, Any]] = database.get_all_auto_bookings()
