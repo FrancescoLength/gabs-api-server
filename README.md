@@ -11,6 +11,7 @@ This Flask-based API server empowers users to seamlessly interact with a famous 
 -   **Streamlined Cancellation:** Easily cancel existing bookings.
 -   **Personalised Booking Management:** View all your upcoming class bookings and waiting list entries.
 -   **Automated Recurring Bookings:** Schedule and manage recurring auto-bookings for your favourite classes. The scheduler runs in a dedicated process to ensure time-critical bookings are handled with high precision and concurrency.
+-   **Automated Timetable Sync & Reconciliation:** The system automatically fetches the latest gym timetable nightly (via authenticated internal APIs), filters out virtual classes, and reconciles existing auto-bookings to handle shifts in class names, times, or instructors.
 -   **Intelligent Push Notifications:** Receive timely push notifications, including crucial cancellation reminders.
 -   **Admin Panel:** Dedicated endpoints for administrators to monitor logs, auto-bookings, push subscriptions, and server status.
 -   **Automatic API Documentation:** Interactive Swagger UI documentation available at `/apidocs`.
@@ -33,7 +34,8 @@ The application is designed with a decoupled architecture to ensure stability an
 -   **`scheduler_runner.py`**: A standalone, dedicated process that runs the APScheduler for all background tasks. It uses a thread pool to execute jobs concurrently, which is critical for handling multiple auto-booking requests for the same class without delays.
 -   **`logging_config.py`**: A centralised module that provides a consistent logging format for both the web server and the scheduler processes.
 -   **`scraper.py`**: A robust web scraping client that handles all interactions with the gym's website, including advanced headers to mimic a real browser and prevent blocking.
--   **`static_timetable.json`**: Stores a static version of the gym's timetable, used as a fallback or for quick lookups.
+-   **`services/timetable_sync.py`**: A dedicated service for fetching the weekly timetable and synchronising the local database to ensure auto-bookings stay valid even if the gym shifts class names or times.
+-   **`static_timetable.json`**: Stores the synchronised version of the gym's timetable, used by the frontend and as the source of truth for the reconciliation job.
 -   **Proactive Session Refresh:** A dedicated scheduler job (`refresh_sessions`) runs periodically (every 2 hours) to ensure all active user sessions with the gym's website remain valid. This minimises the risk of session expiration during critical booking windows.
 -   **Asynchronous & Non-Blocking Booking Logic**: The core auto-booking process has been heavily optimised for speed and reliability. The previous "pre-warming" step has been removed in favour of the proactive session refresh. Furthermore, I/O-intensive operations like writing debug HTML files upon failure are now handled by a dedicated, non-blocking background thread. This ensures that the main booking process is never delayed by slow disk operations, maximising the chances of successfully booking a spot in a competitive, time-sensitive environment.
 
