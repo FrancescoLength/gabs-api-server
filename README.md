@@ -110,10 +110,10 @@ Description=GABS API Gunicorn Service
 After=network.target
 
 [Service]
-User=gabs-admin
-Group=gabs-admin
-WorkingDirectory=/home/gabs-admin/gabs-api-server
-ExecStart=/home/gabs-admin/gabs-api-server/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:5000 app:app
+User=u0_a225
+Group=u0_a225
+WorkingDirectory=/home/u0_a225/gabs-api-server
+ExecStart=/home/u0_a225/gabs-api-server/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:5000 app:app
 Restart=always
 
 [Install]
@@ -127,10 +127,10 @@ Description=GABS Scheduler Service
 After=network.target
 
 [Service]
-User=gabs-admin
-Group=gabs-admin
-WorkingDirectory=/home/gabs-admin/gabs-api-server
-ExecStart=/home/gabs-admin/gabs-api-server/venv/bin/python3 scheduler_runner.py
+User=u0_a225
+Group=u0_a225
+WorkingDirectory=/home/u0_a225/gabs-api-server
+ExecStart=/home/u0_a225/gabs-api-server/venv/bin/python3 scheduler_runner.py
 Restart=always
 
 [Install]
@@ -144,9 +144,9 @@ Description=Ngrok Tunnel for GABS API
 After=network.target
 
 [Service]
-User=gabs-admin
-Group=gabs-admin
-ExecStart=/usr/local/bin/ngrok start --all --config /home/gabs-admin/.config/ngrok/ngrok.yml
+User=u0_a225
+Group=u0_a225
+ExecStart=/usr/local/bin/ngrok start --all --config /home/u0_a225/.config/ngrok/ngrok.yml
 Restart=always
 
 [Install]

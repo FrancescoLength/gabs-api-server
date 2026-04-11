@@ -869,7 +869,8 @@ def get_status() -> Tuple[Any, int]:
                     if match:
                         host: str = match.group(1)
                         port: str = match.group(2)
-                        ssh_command = f"ssh -p {port} u0_a225@{host}"
+                        ssh_user: str = os.getenv('SSH_USER', 'u0_a225')
+                        ssh_command = f"ssh -p {port} {ssh_user}@{host}"
                 break
     except requests.exceptions.RequestException as e:
         logging.error(f"Could not fetch ngrok tunnels: {e}")

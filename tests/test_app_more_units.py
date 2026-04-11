@@ -123,7 +123,7 @@ def test_get_status_success(test_client, mocker):
             'Authorization': f'Bearer {admin_token}'})
     assert response.status_code == 200
     assert response.json['status'] == 'ok'
-    assert "ssh -p 12345 gabs-admin@0.tcp.ngrok.io" in response.json['ssh_tunnel_command']
+    assert "ssh -p 12345 u0_a225@0.tcp.ngrok.io" in response.json['ssh_tunnel_command']
 
 
 def test_get_status_no_tcp_tunnel(test_client, mocker):
