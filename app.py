@@ -869,7 +869,7 @@ def get_status() -> Tuple[Any, int]:
                     if match:
                         host: str = match.group(1)
                         port: str = match.group(2)
-                        ssh_command = f"ssh -p {port} gabs-admin@{host}"
+                        ssh_command = f"ssh -p {port} u0_a225@{host}"
                 break
     except requests.exceptions.RequestException as e:
         logging.error(f"Could not fetch ngrok tunnels: {e}")
