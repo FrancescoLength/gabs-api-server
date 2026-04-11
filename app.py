@@ -882,5 +882,95 @@ def get_status() -> Tuple[Any, int]:
     }), 200
 
 
+NGROK_LOCAL_API = 'http://127.0.0.1:4040/api'
+NGROK_TCP_TUNNEL_NAME = 'ssh'
+NGROK_TCP_TUNNEL_ADDR = '8022'
+
+
+def _get_ngrok_tcp_tunnel() -> Optional[Dict[str, Any]]:
+    """Returns the ssh TCP tunnel dict from the ngrok local API, or None if not running."""
+    try:
+        resp = requests.get(f'{NGROK_LOCAL_API}/tunnels', timeout=3)
+        resp.raise_for_status()
+        for tunnel in resp.json().get('tunnels', []):
+            if tunnel.get('name') == NGROK_TCP_TUNNEL_NAME and tunnel.get('proto') == 'tcp':
+                return tunnel
+    except requests.exceptions.RequestException as e:
+        logging.warning(f'Could not reach ngrok local API: {e}')
+    return None
+
+
+@app.route('/api/admin/ngrok/tcp-status', methods=['GET'])
+@admin_required
+def get_ngrok_tcp_status() -> Tuple[Any, int]:
+    """
+    Returns whether the ngrok SSH (TCP) tunnel is currently active.
+    ---
+    tags:
+      - Admin
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Current TCP tunnel state
+    """
+    tunnel = _get_ngrok_tcp_tunnel()
+    return jsonify({'active': tunnel is not None}), 200
+
+
+@app.route('/api/admin/ngrok/tcp-toggle', methods=['POST'])
+@admin_required
+def toggle_ngrok_tcp() -> Tuple[Any, int]:
+    """
+    Starts or stops the ngrok SSH (TCP) tunnel without affecting the HTTPS tunnel.
+    ---
+    tags:
+      - Admin
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: New TCP tunnel state after toggle
+    """
+    tunnel = _get_ngrok_tcp_tunnel()
+
+    if tunnel is not None:
+        # Tunnel is ON — stop it
+        try:
+            resp = requests.delete(
+                f'{NGROK_LOCAL_API}/tunnels/{NGROK_TCP_TUNNEL_NAME}', timeout=5)
+            # ngrok returns 204 on success
+            if resp.status_code in (200, 204):
+                logging.info('ngrok SSH TCP tunnel stopped via local API.')
+                return jsonify({'active': False, 'message': 'SSH TCP tunnel stopped.'}), 200
+            else:
+                logging.error(f'ngrok DELETE returned {resp.status_code}: {resp.text}')
+                return jsonify({'error': f'ngrok returned {resp.status_code}'}), 500
+        except requests.exceptions.RequestException as e:
+            logging.error(f'Failed to stop ngrok SSH tunnel: {e}')
+            return jsonify({'error': str(e)}), 500
+    else:
+        # Tunnel is OFF — start it
+        try:
+            payload = {
+                'name': NGROK_TCP_TUNNEL_NAME,
+                'addr': NGROK_TCP_TUNNEL_ADDR,
+                'proto': 'tcp',
+            }
+            resp = requests.post(
+                f'{NGROK_LOCAL_API}/tunnels',
+                json=payload,
+                timeout=10)
+            if resp.status_code in (200, 201):
+                logging.info('ngrok SSH TCP tunnel started via local API.')
+                return jsonify({'active': True, 'message': 'SSH TCP tunnel started.'}), 200
+            else:
+                logging.error(f'ngrok POST returned {resp.status_code}: {resp.text}')
+                return jsonify({'error': f'ngrok returned {resp.status_code}'}), 500
+        except requests.exceptions.RequestException as e:
+            logging.error(f'Failed to start ngrok SSH tunnel: {e}')
+            return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
