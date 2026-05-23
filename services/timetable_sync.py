@@ -172,7 +172,8 @@ def sync_auto_bookings_job() -> None:
                 # Check time difference in minutes
                 time_diff = abs((c_time_obj - b_time_obj).total_seconds() / 60)
                 
-                if time_diff <= 15: # allowing up to 15 mins
+                # Allowing up to 30 minutes to handle class shifts (e.g. 12:05 to 11:45)
+                if time_diff <= 30:
                     name_score = fuzz.ratio(b_name.lower(), cls['name'].lower())
                     
                     instructor_score = 0

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional, Callable, List, Tuple
 import os
 import queue
+import time
 
 # Imports from outside the package
 # import app as app_module # We will pass app_instance instead
@@ -165,77 +166,95 @@ def _process_single_booking(
                         )
                 return
 
-            logger.info(
-                f"Attempting to book class on {current_target_date} at {target_time} "
-                f"with {instructor} for user {username} (Booking ID: {booking_id})")
-
-            result = user_scraper.find_and_book_class(
-                target_date_str=current_target_date, class_name=class_name,
-                target_time=target_time, instructor=instructor
-            )
-
-            result_message = result.get('message', '').lower()
-            status = result.get('status')
-            if status == 'success' or (status == 'info' and (
-                    "already registered" in result_message or
-                    "waiting list" in result_message or
-                    "already booked" in result_message)):
-                booked_class_name = result.get('class_name', class_name)
-                database.update_auto_booking_status(
-                    booking_id, 'pending',
-                    last_booked_date=current_target_date,
-                    last_attempt_at=int(today.timestamp()),
-                    retry_count=0)
-                database.add_live_booking(
-                    username, booked_class_name, current_target_date,
-                    target_time, instructor, booking_id)
+            # Attempt to book the class with immediate fast retries if the class is not found yet.
+            # This handles minor publication delays on the gym's server (e.g. 10-30 seconds).
+            max_attempts = 6
+            for attempt in range(1, max_attempts + 1):
                 logger.info(
-                    f"Successfully processed booking for auto-booking {booking_id}. "
-                    f"Status: {result.get('message')}")
-            else:
-                new_retry_count = (retry_count or 0) + 1
-                html_content = result.get('html_content')
+                    f"Attempting to book class on {current_target_date} at {target_time} "
+                    f"with {instructor} for user {username} (Booking ID: {booking_id}) - Attempt {attempt}/{max_attempts}")
 
-                if 'Could not find a suitable match' in result.get('message', ''):
-                    if html_content:
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        debug_filename = f"debug_booking_{booking_id}_{timestamp}.html"
-                        debug_filepath = os.path.join(os.path.dirname(
-                            os.path.abspath(__file__)), debug_filename)
-                        debug_writer_queue_instance.put(
-                            (debug_filepath, html_content))
-                        logger.info(
-                            f"Queued debug HTML for booking {booking_id} to be written to {debug_filename}")
+                result = user_scraper.find_and_book_class(
+                    target_date_str=current_target_date, class_name=class_name,
+                    target_time=target_time, instructor=instructor
+                )
 
-                    if new_retry_count < 2:
-                        database.update_auto_booking_status(
-                            booking_id, 'pending', last_attempt_at=int(
-                                today.timestamp()), retry_count=new_retry_count)
-                        logger.warning(
-                            f"Booking attempt failed for auto-booking {booking_id} (match not found). "
-                            f"Retrying (attempt {new_retry_count}). Result: {result.get('message')}")
-                    else:
-                        database.update_auto_booking_status(
-                            booking_id, 'failed', last_attempt_at=int(
-                                today.timestamp()), retry_count=new_retry_count)
-                        logger.error(
-                            f"Booking attempt failed for auto-booking {booking_id} after 2 attempts (match not found). "
-                            f"Marking as failed. Result: {result.get('message')}")
+                result_message = result.get('message', '').lower()
+                status = result.get('status')
+                if status == 'success' or (status == 'info' and (
+                        "already registered" in result_message or
+                        "waiting list" in result_message or
+                        "already booked" in result_message)):
+                    booked_class_name = result.get('class_name', class_name)
+                    database.update_auto_booking_status(
+                        booking_id, 'pending',
+                        last_booked_date=current_target_date,
+                        last_attempt_at=int(today.timestamp()),
+                        retry_count=0)
+                    database.add_live_booking(
+                        username, booked_class_name, current_target_date,
+                        target_time, instructor, booking_id)
+                    logger.info(
+                        f"Successfully processed booking for auto-booking {booking_id}. "
+                        f"Status: {result.get('message')}")
+                    break
                 else:
-                    if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:
-                        database.update_auto_booking_status(
-                            booking_id, 'pending', last_attempt_at=int(
-                                today.timestamp()), retry_count=new_retry_count)
+                    # If it's a minor publication delay (class not found), wait and retry immediately
+                    if 'Could not find a suitable match' in result.get('message', '') and attempt < max_attempts:
                         logger.warning(
-                            f"Booking attempt failed for auto-booking {booking_id}. "
-                            f"Retrying (attempt {new_retry_count}). Result: {result}")
+                            f"Booking attempt {attempt} failed because class was not found. "
+                            f"Retrying immediately in 10 seconds...")
+                        time.sleep(10)
+                        # Refresh today timestamp for accurate execution times
+                        today = datetime.now()
+                        continue
+
+                    # If it failed for another reason, or we hit max attempts, process the final failure
+                    new_retry_count = (retry_count or 0) + 1
+                    html_content = result.get('html_content')
+
+                    if 'Could not find a suitable match' in result.get('message', ''):
+                        if html_content:
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            debug_filename = f"debug_booking_{booking_id}_{timestamp}.html"
+                            debug_filepath = os.path.join(os.path.dirname(
+                                os.path.abspath(__file__)), debug_filename)
+                            debug_writer_queue_instance.put(
+                                (debug_filepath, html_content))
+                            logger.info(
+                                f"Queued debug HTML for booking {booking_id} to be written to {debug_filename}")
+
+                        # Standard cron-level retry handling (allows trying again on next minute(s) up to 2 times)
+                        if new_retry_count < 2:
+                            database.update_auto_booking_status(
+                                booking_id, 'pending', last_attempt_at=int(
+                                    today.timestamp()), retry_count=new_retry_count)
+                            logger.warning(
+                                f"Booking attempt failed for auto-booking {booking_id} (match not found after fast retries). "
+                                f"Will retry on next minute scheduler cycle. Result: {result.get('message')}")
+                        else:
+                            database.update_auto_booking_status(
+                                booking_id, 'failed', last_attempt_at=int(
+                                    today.timestamp()), retry_count=new_retry_count)
+                            logger.error(
+                                f"Booking attempt failed for auto-booking {booking_id} after {new_retry_count} attempts (match not found). "
+                                f"Marking as failed. Result: {result.get('message')}")
                     else:
-                        database.update_auto_booking_status(
-                            booking_id, 'failed', last_attempt_at=int(
-                                today.timestamp()), retry_count=new_retry_count)
-                        logger.error(
-                            f"Booking attempt failed for auto-booking {booking_id} after {new_retry_count} retries. "
-                            f"Marking as failed. Result: {result}")
+                        if new_retry_count < config.MAX_AUTO_BOOK_RETRIES:
+                            database.update_auto_booking_status(
+                                booking_id, 'pending', last_attempt_at=int(
+                                    today.timestamp()), retry_count=new_retry_count)
+                            logger.warning(
+                                f"Booking attempt failed for auto-booking {booking_id}. "
+                                f"Retrying (attempt {new_retry_count}). Result: {result}")
+                        else:
+                            database.update_auto_booking_status(
+                                booking_id, 'failed', last_attempt_at=int(
+                                    today.timestamp()), retry_count=new_retry_count)
+                            logger.error(
+                                f"Booking attempt failed for auto-booking {booking_id} after {new_retry_count} retries. "
+                                f"Marking as failed. Result: {result}")
+                    break
         except SessionExpiredError:
             handle_session_expiration_func(username)
             logger.warning(
