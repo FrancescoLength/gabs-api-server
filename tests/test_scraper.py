@@ -90,28 +90,6 @@ def test_get_csrf_token_success(scraper_mock, mocker):
     assert token == "new_token"
 
 
-def test_get_csrf_token_tag_dict_behavior(scraper_mock, mocker):
-    # Test the branch where token_tag behaves like a dict (BeautifulSoup Tag)
-    html = '<html><head><meta name="csrf-token" content="new_token"></head></html>'
-    mock_response = MagicMock()
-    mock_response.text = html
-    scraper_mock.session.get.return_value = mock_response
-
-    # Mock BeautifulSoup to return a tag that is a dict but not strictly an instance of dict?
-    # Actually, the code `isinstance(token_tag, dict)` checks if it's a dict.
-    # BS4 Tags act like dicts but aren't dict instances.
-    # The code `if token_tag and isinstance(token_tag, dict):` is likely checking for raw dicts
-    # (maybe from JSON parsing mocked elsewhere?).
-    # The real BS4 tag falls into `elif token_tag:`.
-
-    # Let's try to hit the `elif token_tag:` branch more explicitly if needed,
-    # but the standard test hits it if `isinstance(tag, dict)` is false.
-    # Standard BS4 tag is NOT a dict instance.
-
-    token = scraper_mock._get_csrf_token()
-    assert token == "new_token"
-
-
 def test_get_csrf_token_failure(scraper_mock, mocker):
     html = '<html><head></head></html>'
     mock_response = MagicMock()

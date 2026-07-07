@@ -154,11 +154,9 @@ def test_send_cancellation_reminders_no_subscription(memory_db, mocker):
     # 3. Assert
     mock_webpush.assert_not_called()  # Use the mock object directly
 
-    # Check that reminder_sent flag is still set to 1 even if no sub found (to avoid retrying)
-    # Assuming implementation marks it as sent even if no sub
-    # Let's verify DB state
+    # Booking must still be marked as handled so it is not retried forever
     reminders = database.get_live_bookings_for_reminder()
-    assert len(reminders) == 0  # Should be marked as sent or handled
+    assert len(reminders) == 0
 
 
 def test_send_cancellation_reminders_webpush_error(memory_db, mocker):

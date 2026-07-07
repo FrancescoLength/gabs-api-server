@@ -5,11 +5,6 @@ from flask_jwt_extended import create_access_token
 from gabs_api_server.app import debug_file_writer, app
 
 
-def test_debug_file_writer_success(mocker):
-    # This test is a placeholder or can be removed if covered by logic test
-    pass
-
-
 def test_debug_file_writer_logic(mocker):
     # Test the logic of the writer function directly by mocking the queue
     mock_queue = mocker.Mock()

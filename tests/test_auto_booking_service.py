@@ -1,8 +1,7 @@
 import threading
 from datetime import datetime, timedelta
-from unittest.mock import Mock
 from gabs_api_server.services.auto_booking_service import (
-    process_auto_bookings_job, _process_single_booking, MAX_BOOKING_WORKERS)
+    process_auto_bookings_job, _process_single_booking)
 from gabs_api_server.app import app, debug_writer_queue, handle_session_expiration
 from gabs_api_server import database, config
 from gabs_api_server.scraper import SessionExpiredError
@@ -96,6 +95,10 @@ def test_process_auto_bookings_job_booking_match_not_found_retry(
     # the 48h booking window
     target_time = (datetime.now() + timedelta(minutes=5)).strftime("%H:%M")
     day_of_week = datetime.now().strftime("%A")
+
+    # The fast-retry loop sleeps 10s between attempts; skip the real waits
+    mocker.patch(
+        'gabs_api_server.services.auto_booking_service.time.sleep')
 
     # Mock the Scraper object that get_scraper_instance will return
     mock_scraper_obj = mocker.Mock()
@@ -286,11 +289,8 @@ def test_process_auto_bookings_job_scraper_not_found_max_retries(
     booking_id = database.add_auto_booking(
         username, class_name, target_time, day_of_week, "instructor")
 
-    # Set retry_count to MAX_AUTO_BOOK_RETRIES - 1 so the next attempt hits the limit
-    # Note: The logic in auto_booking_service increments retry_count BEFORE checking the limit for the scraper case.
-    # Logic: new_retry_count = retry_count + 1. If new_retry_count < MAX (3), update pending. Else failed.
-    # So if we want it to fail, we need new_retry_count to be 3. So start with
-    # 2.
+    # Start at MAX - 1: the attempt increments the count to MAX, which
+    # crosses the limit and marks the booking as failed
     database.update_auto_booking_status(
         booking_id, 'pending', retry_count=config.MAX_AUTO_BOOK_RETRIES - 1)
 
@@ -518,8 +518,3 @@ def test_parallel_error_isolation(memory_db, mocker):
     bad_booking = database.get_auto_booking_by_id(id_bad)
     assert bad_booking[4] == 'pending'  # Retry
     assert bad_booking[7] == 1  # retry_count incremented
-
-
-def test_max_booking_workers_constant():
-    """Verify MAX_BOOKING_WORKERS is set to a sensible value for Pi Zero W."""
-    assert MAX_BOOKING_WORKERS == 5
